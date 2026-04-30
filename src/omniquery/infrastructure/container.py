@@ -7,7 +7,9 @@ from omniquery.application.use_cases.run_eda_use_case import RunEdaUseCase
 from omniquery.domain.ports.inbound.eda_use_case import EdaUseCase
 from omniquery.infrastructure.db.adapter_factory import resolve_db_adapter
 from omniquery.infrastructure.db.sql_profiling_adapter import SqlProfilingAdapter
+from omniquery.infrastructure.graph.schema_linker import SchemaLinker
 from omniquery.infrastructure.llm.ollama_adapter import OllamaAdapter
+from omniquery.infrastructure.llm.ollama_embedding_adapter import OllamaEmbeddingAdapter
 
 
 class Container:
@@ -29,6 +31,7 @@ class Container:
         ollama_model: str = "llama3.2:latest",
         ollama_base_url: str = "http://localhost:11434",
         ollama_timeout: float = 300.0,
+        embedding_model: str = "nomic-embed-text",
     ) -> None:
         self._ollama_model = ollama_model
         self._ollama_base_url = ollama_base_url
@@ -38,6 +41,11 @@ class Container:
             base_url=self._ollama_base_url,
             timeout=self._ollama_timeout,
         )
+        self._emb = OllamaEmbeddingAdapter(
+            model=embedding_model,
+            base_url=ollama_base_url,
+        )
+        self._schema_linker = SchemaLinker(self._emb)
         self._profiler = SqlProfilingAdapter()
 
     def eda_use_case(self, connection_url: str) -> EdaUseCase:
@@ -51,10 +59,15 @@ class Container:
     def eda_session_graph(self, connection_url: str) -> EdaSessionGraph:
         """
         Return an EdaSessionGraph (LangGraph) wired for the given DB URL.
-        The LLM and profiler adapters are shared singletons.
+        The LLM, profiler, and schema linker adapters are shared singletons.
         """
         db_adapter = resolve_db_adapter(connection_url)
-        return EdaSessionGraph(db=db_adapter, llm=self._llm, profiler=self._profiler)
+        return EdaSessionGraph(
+            db=db_adapter,
+            llm=self._llm,
+            profiler=self._profiler,
+            schema_linker=self._schema_linker,
+        )
 
 
 @lru_cache(maxsize=1)
@@ -69,4 +82,5 @@ def get_container() -> Container:
         ollama_model=os.getenv("OLLAMA_MODEL", "llama3.2:latest"),
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         ollama_timeout=float(os.getenv("OLLAMA_TIMEOUT", "300")),
+        embedding_model=os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
     )

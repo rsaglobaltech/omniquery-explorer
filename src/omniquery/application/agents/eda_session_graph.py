@@ -18,6 +18,7 @@ from omniquery.domain.ports.outbound.database_port import DatabasePort
 from omniquery.domain.ports.outbound.llm_port import LlmPort
 from omniquery.domain.ports.outbound.profiling_port import ProfilingPort
 from omniquery.infrastructure.graph.schema_graph_service import SchemaGraphService
+from omniquery.infrastructure.graph.schema_linker import SchemaLinker
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +46,18 @@ class EdaSessionState(TypedDict):
 class EdaSessionGraph:
     """LangGraph StateGraph orchestrating the full multi-agent EDA pipeline."""
 
-    def __init__(self, db: DatabasePort, llm: LlmPort, profiler: ProfilingPort) -> None:
+    def __init__(
+        self,
+        db: DatabasePort,
+        llm: LlmPort,
+        profiler: ProfilingPort,
+        schema_linker: SchemaLinker | None = None,
+    ) -> None:
         self._db = db
         self._llm = llm
         self._profiler = profiler
         self._graph_svc = SchemaGraphService()
+        self._schema_linker = schema_linker
         self._app = self._build()
 
     async def run(self, connection_url: str, question: str, max_rows: int = 500) -> AnalysisResult:
@@ -253,6 +261,22 @@ class EdaSessionGraph:
             max_rows=state.get("max_rows", 500),
         )
         logger.info("[generate_sql] Generating SQL for: %s", question)
+        # Semantic schema linking — re-rank tables by embedding similarity
+        if self._schema_linker is not None:
+            try:
+                semantic_tables = await self._schema_linker.rank_tables(
+                    schema, question, top_k=6
+                )
+                logger.debug("[generate_sql] semantic tables: %s", semantic_tables)
+                # Rebuild query with hint tables so the LLM adapter skips Phase-A selection
+                query = EdaQuery(
+                    question=question,
+                    connection_url=state["connection_url"],
+                    max_rows=state.get("max_rows", 500),
+                    hint_tables=semantic_tables,
+                )
+            except Exception as exc:
+                logger.warning("[generate_sql] schema linker failed: %s", exc)
         sql = await self._llm.generate_sql(schema, query)
         return {**state, "generated_sql": sql, "sql_attempts": 0}
 

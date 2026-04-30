@@ -73,28 +73,34 @@ class OllamaAdapter(LlmPort):
 
     async def generate_sql(self, schema: DatabaseSchema, query: EdaQuery) -> str:
         # ── Phase A: table selection ──────────────────────────────────────────
-        # Give the LLM a compact list of ALL table names and let it pick the
-        # most relevant ones *before* seeing any column details.  This prevents
-        # it from inventing columns it never saw.
-        all_table_names = "\n".join(f"- {n}" for n in schema.table_names)
+        # If semantic hint_tables are already provided (P1 schema linking),
+        # skip the LLM selection step and use them directly.
+        if query.hint_tables:
+            valid_tables = [t for t in query.hint_tables if schema.get_table(t) is not None]
+        else:
+            # Give the LLM a compact list of ALL table names and let it pick the
+            # most relevant ones *before* seeing any column details.  This prevents
+            # it from inventing columns it never saw.
+            all_table_names = "\n".join(f"- {n}" for n in schema.table_names)
 
-        selection_prompt = textwrap.dedent(f"""
-            You have a {schema.engine.value} database called '{schema.db_name}'.
-            Here is the full list of tables:
+            selection_prompt = textwrap.dedent(f"""
+                You have a {schema.engine.value} database called '{schema.db_name}'.
+                Here is the full list of tables:
 
-            {all_table_names}
+                {all_table_names}
 
-            Question: {query.question}
+                Question: {query.question}
 
-            Which 3 to 6 tables are most relevant to answer this question?
-            Reply with ONLY a plain comma-separated list of table names — nothing else.
-            Example: rna, taxonomy, xref
-        """).strip()
+                Which 3 to 6 tables are most relevant to answer this question?
+                Reply with ONLY a plain comma-separated list of table names — nothing else.
+                Example: rna, taxonomy, xref
+            """).strip()
 
-        raw_tables = await self._chat(selection_prompt)
-        selected = [t.strip() for t in raw_tables.replace("\n", ",").split(",") if t.strip()]
-        # Verify each selected table actually exists in the schema
-        valid_tables = [t for t in selected if schema.get_table(t) is not None]
+            raw_tables = await self._chat(selection_prompt)
+            selected = [t.strip() for t in raw_tables.replace("\n", ",").split(",") if t.strip()]
+            # Verify each selected table actually exists in the schema
+            valid_tables = [t for t in selected if schema.get_table(t) is not None]
+
         # Fallback: use the generic DDL summary
         if not valid_tables:
             verified_ddl = schema.to_ddl_summary()
