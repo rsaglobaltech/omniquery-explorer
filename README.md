@@ -120,7 +120,7 @@ Infrastructure Adapters
 ## Tech Stack
 
 - Python 3.12
-- Poetry
+- uv
 - Typer + Rich
 - SQLAlchemy async + asyncpg + aiomysql + oracledb
 - LangGraph + LangChain Core
@@ -132,7 +132,7 @@ Infrastructure Adapters
 ### 1. Install
 
 ```bash
-poetry install
+uv sync
 ```
 
 ### 2. Configure environment
@@ -161,9 +161,9 @@ ollama serve
 ### 4. Run
 
 ```bash
-poetry run omniquery --help
-poetry run omniquery ask "What are the top 10 customers by total orders?"
-poetry run omniquery explore
+uv run omniquery --help
+uv run omniquery ask "What are the top 10 customers by total orders?"
+uv run omniquery explore
 ```
 
 ## CLI Commands

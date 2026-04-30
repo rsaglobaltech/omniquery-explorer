@@ -15,4 +15,4 @@ export DATABASE_URL="${DATABASE_URL:-postgresql+asyncpg://reader:NWDMCE5xdipIjRr
 export OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2:latest}"
 export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://localhost:11434}"
 
-poetry run omniquery "$@"
+uv run omniquery "$@"
