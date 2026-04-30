@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import textwrap
 from pathlib import Path
@@ -11,6 +12,7 @@ import httpx
 from omniquery.domain.entities.database_schema import DatabaseSchema
 from omniquery.domain.entities.eda_query import EdaQuery
 from omniquery.domain.ports.outbound.llm_port import LlmPort
+from omniquery.infrastructure.logging.agent_observability import get_log_context, get_payload_limit
 
 # Matches anything that is not a SELECT at the top of the LLM response
 _NON_SELECT = re.compile(
@@ -25,6 +27,7 @@ _TABLE_REF = re.compile(
 )
 
 _SYSTEM_PROMPT_PATH = Path(__file__).parents[4] / "docs" / "system_prompt.md"
+logger = logging.getLogger(__name__)
 
 
 def _extract_table_names(sql: str) -> list[str]:
@@ -36,6 +39,28 @@ def _load_system_prompt() -> str:
     if _SYSTEM_PROMPT_PATH.exists():
         return _SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
     return ""  # Graceful fallback if path changes
+
+
+def _extract_usage(payload: dict[str, Any]) -> dict[str, Any]:
+    prompt_tokens = payload.get("prompt_eval_count")
+    completion_tokens = payload.get("eval_count")
+    total_tokens = None
+    if isinstance(prompt_tokens, int) and isinstance(completion_tokens, int):
+        total_tokens = prompt_tokens + completion_tokens
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "total_duration_ns": payload.get("total_duration"),
+        "prompt_eval_duration_ns": payload.get("prompt_eval_duration"),
+        "completion_eval_duration_ns": payload.get("eval_duration"),
+    }
+
+
+def _truncate_text(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "...<truncated>"
 
 
 class OllamaAdapter(LlmPort):
@@ -96,7 +121,7 @@ class OllamaAdapter(LlmPort):
                 Example: rna, taxonomy, xref
             """).strip()
 
-            raw_tables = await self._chat(selection_prompt)
+            raw_tables = await self._chat(selection_prompt, call_name="table_selection")
             selected = [t.strip() for t in raw_tables.replace("\n", ",").split(",") if t.strip()]
             # Verify each selected table actually exists in the schema
             valid_tables = [t for t in selected if schema.get_table(t) is not None]
@@ -122,7 +147,7 @@ class OllamaAdapter(LlmPort):
             - Maximum {query.max_rows} rows (add LIMIT as appropriate for {schema.engine.value}).
         """).strip()
 
-        raw = await self._chat(user_message)
+        raw = await self._chat(user_message, call_name="generate_sql")
         sql = self._extract_sql(raw)
         self._assert_select_only(sql)
         return sql
@@ -152,7 +177,7 @@ class OllamaAdapter(LlmPort):
             📊 Análisis Exploratorio, 📝 Conclusiones).
         """).strip()
 
-        return await self._chat(user_message)
+        return await self._chat(user_message, call_name="generate_report")
 
     async def fix_sql(
         self,
@@ -190,7 +215,7 @@ class OllamaAdapter(LlmPort):
             {schema.engine.value}).
         """).strip()
 
-        raw = await self._chat(user_message)
+        raw = await self._chat(user_message, call_name="fix_sql")
         sql = self._extract_sql(raw)
         self._assert_select_only(sql)
         return sql
@@ -199,7 +224,13 @@ class OllamaAdapter(LlmPort):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _chat(self, user_content: str) -> str:
+    async def _chat(self, user_content: str, call_name: str = "chat") -> str:
+        text, _ = await self._chat_with_meta(user_content, call_name=call_name)
+        return text
+
+    async def _chat_with_meta(
+        self, user_content: str, call_name: str = "chat"
+    ) -> tuple[str, dict[str, Any]]:
         payload = {
             "model": self._model,
             "stream": False,
@@ -216,12 +247,28 @@ class OllamaAdapter(LlmPort):
             response.raise_for_status()
 
         data = response.json()
+        usage = _extract_usage(data)
         try:
-            return data["message"]["content"].strip()
+            content = data["message"]["content"].strip()
         except (KeyError, TypeError) as exc:
             raise RuntimeError(
                 f"Unexpected Ollama response structure: {data}"
             ) from exc
+        log_ctx = get_log_context()
+        payload_limit = get_payload_limit()
+        logger.info(
+            "LLM call completed",
+            extra={
+                "session_id": log_ctx.get("session_id"),
+                "agent": log_ctx.get("agent", "llm"),
+                "event": "llm_call",
+                "context": {"model": self._model, "call_name": call_name},
+                "tokens": usage,
+                "input": {"prompt": _truncate_text(user_content, payload_limit)},
+                "output": {"response": _truncate_text(content, payload_limit)},
+            },
+        )
+        return content, usage
 
     @staticmethod
     def _extract_sql(text: str) -> str:

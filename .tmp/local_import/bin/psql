@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-omniquery-postgres-local}"
+user=""
+db=""
+file=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --username)
+      user="$2"
+      shift 2
+      ;;
+    --dbname)
+      db="$2"
+      shift 2
+      ;;
+    --file)
+      file="$2"
+      shift 2
+      ;;
+    --host|--port)
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$user" || -z "$db" || -z "$file" ]]; then
+  echo "psql wrapper: argumentos insuficientes" >&2
+  exit 1
+fi
+
+while IFS= read -r csv_path; do
+  [[ -z "$csv_path" ]] && continue
+  if [[ ! -f "$csv_path" ]]; then
+    echo "psql wrapper: no existe CSV local: $csv_path" >&2
+    exit 1
+  fi
+  docker exec "$POSTGRES_CONTAINER" mkdir -p "$(dirname "$csv_path")"
+  docker cp "$csv_path" "${POSTGRES_CONTAINER}:${csv_path}"
+done < <(python3 - "$file" <<'PY'
+import re
+import sys
+
+content = open(sys.argv[1], encoding="utf-8").read()
+for path in sorted(set(re.findall(r"FROM '([^']+)'", content))):
+    print(path)
+PY
+)
+
+cat "$file" | docker exec -i "$POSTGRES_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$user" -d "$db"

@@ -1,0 +1,40 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: omniquery-mysql-local
+    command: --local-infile=1 --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: videos_subcriptions_db
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: Server2026
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_local_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  postgres:
+    image: postgres:16
+    container_name: omniquery-postgres-local
+    environment:
+      POSTGRES_DB: omniquery_local
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: Server2026
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_local_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d omniquery_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  mysql_local_data:
+  postgres_local_data:

@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS "bank_churn_bank_churn" ("customerid" TEXT,"surname" TEXT,"creditscore" TEXT,"geography" TEXT,"gender" TEXT,"age" TEXT,"tenure" TEXT,"balance" TEXT,"numofproducts" TEXT,"hascrcard" TEXT,"isactivemember" TEXT,"estimatedsalary" TEXT,"exited" TEXT);
+\copy "bank_churn_bank_churn" ("customerid","surname","creditscore","geography","gender","age","tenure","balance","numofproducts","hascrcard","isactivemember","estimatedsalary","exited") FROM '/Users/alejandro/PycharmProjects/omniquery-explorer/.tmp/aws_import/bank_customer_churn/Bank_Churn.csv' WITH (FORMAT csv, HEADER true);
+CREATE TABLE IF NOT EXISTS "bank_churn_bank_churn_data_dictionary" ("field" TEXT,"description" TEXT);
+\copy "bank_churn_bank_churn_data_dictionary" ("field","description") FROM '/Users/alejandro/PycharmProjects/omniquery-explorer/.tmp/aws_import/bank_customer_churn/Bank_Churn_Data_Dictionary.csv' WITH (FORMAT csv, HEADER true);

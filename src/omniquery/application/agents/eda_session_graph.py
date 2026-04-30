@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import logging
 import re
+import time
+import uuid
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal, NotRequired
 
 from langgraph.graph import END, StateGraph
@@ -19,6 +22,7 @@ from omniquery.domain.ports.outbound.llm_port import LlmPort
 from omniquery.domain.ports.outbound.profiling_port import ProfilingPort
 from omniquery.infrastructure.graph.schema_graph_service import SchemaGraphService
 from omniquery.infrastructure.graph.schema_linker import SchemaLinker
+from omniquery.infrastructure.logging.agent_observability import get_payload_limit, log_context
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +31,7 @@ MAX_TABLES_TO_PROFILE = 30
 
 
 class EdaSessionState(TypedDict):
+    session_id: str
     connection_url: str
     question: str
     max_rows: int
@@ -41,6 +46,9 @@ class EdaSessionState(TypedDict):
     raw_data: NotRequired[list[dict[str, Any]]]
     report: NotRequired[str]
     error: NotRequired[str]
+
+
+NodeCallable = Callable[[EdaSessionState], Awaitable[EdaSessionState]]
 
 
 class EdaSessionGraph:
@@ -61,7 +69,9 @@ class EdaSessionGraph:
         self._app = self._build()
 
     async def run(self, connection_url: str, question: str, max_rows: int = 500) -> AnalysisResult:
+        session_id = uuid.uuid4().hex[:12]
         initial: EdaSessionState = {
+            "session_id": session_id,
             "connection_url": connection_url,
             "question": question,
             "max_rows": max_rows,
@@ -77,7 +87,27 @@ class EdaSessionGraph:
             "report": "",
             "error": "",
         }
-        final: EdaSessionState = await self._app.ainvoke(initial)
+        logger.info(
+            "EDA session started",
+            extra={
+                "session_id": session_id,
+                "agent": "session",
+                "event": "session_start",
+                "context": {"mode": "run"},
+                "input": self._state_snapshot(initial),
+            },
+        )
+        with log_context(session_id=session_id, agent="session"):
+            final: EdaSessionState = await self._app.ainvoke(initial)
+        logger.info(
+            "EDA session finished",
+            extra={
+                "session_id": session_id,
+                "agent": "session",
+                "event": "session_end",
+                "output": self._state_snapshot(final),
+            },
+        )
         result = AnalysisResult(question=question)
         result.generated_sql = final.get("generated_sql", "")
         result.raw_data = final.get("raw_data", [])
@@ -88,7 +118,9 @@ class EdaSessionGraph:
     async def run_explore(
         self, connection_url: str, max_rows: int = 500
     ) -> tuple[list[ProposedQuestion], list[ScoredTable], str]:
+        session_id = uuid.uuid4().hex[:12]
         initial: EdaSessionState = {
+            "session_id": session_id,
             "connection_url": connection_url,
             "question": "",
             "max_rows": max_rows,
@@ -104,8 +136,28 @@ class EdaSessionGraph:
             "report": "",
             "error": "",
         }
+        logger.info(
+            "EDA explore session started",
+            extra={
+                "session_id": session_id,
+                "agent": "session",
+                "event": "session_start",
+                "context": {"mode": "explore"},
+                "input": self._state_snapshot(initial),
+            },
+        )
         explore_app = self._build(explore_only=True)
-        final: EdaSessionState = await explore_app.ainvoke(initial)
+        with log_context(session_id=session_id, agent="session"):
+            final: EdaSessionState = await explore_app.ainvoke(initial)
+        logger.info(
+            "EDA explore session finished",
+            extra={
+                "session_id": session_id,
+                "agent": "session",
+                "event": "session_end",
+                "output": self._state_snapshot(final),
+            },
+        )
         return (
             final.get("proposed_questions", []),
             final.get("scored_tables", []),
@@ -114,17 +166,23 @@ class EdaSessionGraph:
 
     def _build(self, explore_only: bool = False):
         sg = StateGraph(EdaSessionState)
-        sg.add_node("introspect", self._node_introspect)
-        sg.add_node("profile", self._node_profile)
-        sg.add_node("build_graph", self._node_build_graph)
-        sg.add_node("propose_questions", self._node_propose_questions)
+        sg.add_node("introspect", self._wrap_node("introspect", self._node_introspect))
+        sg.add_node("profile", self._wrap_node("profile", self._node_profile))
+        sg.add_node("build_graph", self._wrap_node("build_graph", self._node_build_graph))
+        sg.add_node(
+            "propose_questions",
+            self._wrap_node("propose_questions", self._node_propose_questions),
+        )
         if not explore_only:
-            sg.add_node("generate_sql", self._node_generate_sql)
-            sg.add_node("execute_sql", self._node_execute_sql)
-            sg.add_node("fix_sql", self._node_fix_sql)
-            sg.add_node("generate_report", self._node_generate_report)
+            sg.add_node("generate_sql", self._wrap_node("generate_sql", self._node_generate_sql))
+            sg.add_node("execute_sql", self._wrap_node("execute_sql", self._node_execute_sql))
+            sg.add_node("fix_sql", self._wrap_node("fix_sql", self._node_fix_sql))
+            sg.add_node(
+                "generate_report",
+                self._wrap_node("generate_report", self._node_generate_report),
+            )
         else:
-            sg.add_node("summarize", self._node_summarize)
+            sg.add_node("summarize", self._wrap_node("summarize", self._node_summarize))
         sg.set_entry_point("introspect")
         sg.add_edge("introspect", "profile")
         sg.add_edge("profile", "build_graph")
@@ -147,6 +205,87 @@ class EdaSessionGraph:
             sg.add_edge("fix_sql", "execute_sql")
             sg.add_edge("generate_report", END)
         return sg.compile()
+
+    def _wrap_node(self, agent_name: str, node_fn: NodeCallable) -> NodeCallable:
+        async def _wrapped(state: EdaSessionState) -> EdaSessionState:
+            start = time.perf_counter()
+            session_id = state.get("session_id", "n/a")
+            with log_context(session_id=session_id, agent=agent_name):
+                logger.info(
+                    "Agent started",
+                    extra={
+                        "session_id": session_id,
+                        "agent": agent_name,
+                        "event": "agent_start",
+                        "input": self._state_snapshot(state),
+                    },
+                )
+                try:
+                    updated = await node_fn(state)
+                except Exception as exc:
+                    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+                    logger.exception(
+                        "Agent failed",
+                        extra={
+                            "session_id": session_id,
+                            "agent": agent_name,
+                            "event": "agent_error",
+                            "duration_ms": elapsed_ms,
+                            "error": str(exc),
+                        },
+                    )
+                    return {**state, "error": str(exc)}
+
+                elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+                logger.info(
+                    "Agent finished",
+                    extra={
+                        "session_id": session_id,
+                        "agent": agent_name,
+                        "event": "agent_end",
+                        "duration_ms": elapsed_ms,
+                        "output": self._state_delta(state, updated),
+                    },
+                )
+                return updated
+
+        return _wrapped
+
+    @staticmethod
+    def _state_snapshot(state: EdaSessionState) -> dict[str, Any]:
+        schema: DatabaseSchema | None = state.get("schema")
+        scored = state.get("scored_tables", [])
+        proposals = state.get("proposed_questions", [])
+        rows = state.get("raw_data", [])
+        profiles = state.get("profiles", {})
+        return {
+            "question": _truncate_text(state.get("question", "")),
+            "max_rows": state.get("max_rows", 500),
+            "sql_attempts": state.get("sql_attempts", 0),
+            "has_schema": schema is not None,
+            "schema_tables": len(schema.tables) if schema else 0,
+            "profiled_tables": len(profiles),
+            "scored_tables": len(scored),
+            "proposed_questions": len(proposals),
+            "generated_sql": _truncate_text(state.get("generated_sql", "")),
+            "rows": len(rows),
+            "has_report": bool(state.get("report")),
+            "error": _truncate_text(state.get("error", "")),
+        }
+
+    @classmethod
+    def _state_delta(
+        cls,
+        before: EdaSessionState,
+        after: EdaSessionState,
+    ) -> dict[str, Any]:
+        before_view = cls._state_snapshot(before)
+        after_view = cls._state_snapshot(after)
+        changed: dict[str, Any] = {}
+        for key, value in after_view.items():
+            if before_view.get(key) != value:
+                changed[key] = value
+        return changed if changed else {"status": "no_changes"}
 
     async def _node_introspect(self, state: EdaSessionState) -> EdaSessionState:
         logger.info("[introspect] Fetching schema...")
@@ -364,3 +503,12 @@ def _parse_proposed_questions(raw: str) -> list[ProposedQuestion]:
                 )
             )
     return questions
+
+
+def _truncate_text(text: str, limit: int | None = None) -> str:
+    if not text:
+        return ""
+    max_len = limit or get_payload_limit()
+    if len(text) <= max_len:
+        return text
+    return text[:max_len] + "...<truncated>"
