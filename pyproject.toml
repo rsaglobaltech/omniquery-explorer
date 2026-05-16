@@ -30,6 +30,7 @@ dependencies = [
 
 [project.scripts]
 omniquery = "omniquery.adapters.cli.main:app"
+omniquery-web = "omniquery.adapters.web.runner:main"
 
 [dependency-groups]
 dev = [
