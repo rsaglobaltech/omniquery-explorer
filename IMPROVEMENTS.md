@@ -15,7 +15,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | 1 | Hardening SQL (sqlglot AST + role read-only + timeouts) | Alto | M | P0 | 🟡 | `34a9ba4` + `f219d38` (AST y timeouts hechos; rol DB pendiente) |
 | 2 | Multi-LLM provider (OpenAI / Anthropic / Bedrock / Ollama) | Alto | M | P0 | 🟡 | `9aec4e5` (OpenAI + Anthropic hechos; Bedrock/Vertex pendientes) |
 | 3 | FastAPI Web Adapter + SSE streaming | Alto | M | P0 | ✅ | `8705473` |
-| 4 | Persistencia (sesiones, historial, query log) | Alto | M | P0 | ⬜ | — |
+| 4 | Persistencia (sesiones, historial, query log) | Alto | M | P0 | 🟡 | `b8a9ea9` (SQLite + ORM hechos; Alembic + Postgres prod pendientes) |
 | 5 | Cache de schema, profile y embeddings | Alto | S | P0 | 🟡 | `62095d6` (schema + embeddings; profile pendiente) |
 | 6 | Configuración tipada (Pydantic Settings) + gestión de secretos | Alto | S | P0 | ✅ | `0c08df2` |
 | 7 | Cobertura de tests >70% + harness de evaluación text-to-SQL | Alto | L | P1 | 🟡 | `e96bcc7` (unit tests añadidos; harness eval pendiente) |
@@ -49,6 +49,7 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-16 | `49e757d` | ci: GitHub Actions + ruff baseline |
 | 2026-05-16 | `978e1cd` | docs: progreso marcado en IMPROVEMENTS.md |
 | 2026-05-16 | `f219d38` | feat(db): pool LRU + statement timeout dialect-aware |
+| 2026-05-16 | `b8a9ea9` | feat(persistence): SQLite + sessions/queries/reports + hook en use_case |
 
 ---
 
@@ -87,15 +88,15 @@ Dep ya instalada (`fastapi`, `uvicorn`). Añadir:
 - ⬜ Rate-limit por IP/API key (pendiente).
 - ⬜ Manejo de cancelación con `asyncio.CancelledError` para liberar conexiones DB cuando el cliente cierra el SSE.
 
-### 2.4 Persistencia — ⬜ pendiente
+### 2.4 Persistencia — 🟡 parcial (commit `b8a9ea9`)
 
 Hoy no hay nada persistido. Para uso real necesitamos:
-- Tabla `sessions(id, user_id, connection_url_ref, created_at, …)`.
-- Tabla `queries(id, session_id, question, generated_sql, status, error, duration_ms, row_count, llm_tokens, …)`.
-- Tabla `reports(query_id, markdown, charts_paths)`.
-- `cached_profiles(connection_fingerprint, table_name, profile_json, ttl)`.
-- `cached_schemas(connection_fingerprint, schema_json, ttl)`.
-- Implementación con SQLAlchemy async sobre un Postgres "interno" (separado del DB analizado). Alembic para migraciones.
+- ✅ Tabla `sessions(id, connection_fingerprint, db_engine, created_at)`.
+- ✅ Tabla `queries(id, session_id, question, generated_sql, status, error, duration_ms, row_count, created_at)`.
+- ✅ Tabla `reports(query_id, markdown, created_at)`.
+- ⬜ `cached_profiles(connection_fingerprint, table_name, profile_json, ttl)` — sigue en disco vía `DiskCache`.
+- ✅ `cached_schemas` (vía `DiskCache`, no en BD relacional).
+- 🟡 Implementación con SQLAlchemy async sobre SQLite por defecto (configurable a Postgres con `PERSIST_DATABASE_URL`). ⬜ Migraciones Alembic.
 
 ### 2.5 Cache — 🟡 parcial (commit `62095d6`)
 
