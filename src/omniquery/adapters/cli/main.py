@@ -18,7 +18,6 @@ Environment variables:
 """
 
 import asyncio
-import os
 from typing import Optional
 
 import typer
@@ -36,6 +35,7 @@ from omniquery.adapters.cli.console import (
     print_success,
 )
 from omniquery.adapters.cli.charts import chart_query_results, chart_profile_scores
+from omniquery.config import get_settings
 from omniquery.domain.entities.eda_query import EdaQuery
 from omniquery.infrastructure.container import get_container
 from omniquery.infrastructure.logging.agent_observability import configure_logging
@@ -49,13 +49,15 @@ app = typer.Typer(
 
 
 def _require_url(url: Optional[str]) -> str:
-    resolved = url or os.getenv("DATABASE_URL")
-    if not resolved:
-        print_error(
-            "Debes proporcionar --url o definir la variable de entorno DATABASE_URL."
-        )
-        raise typer.Exit(code=1)
-    return resolved
+    if url:
+        return url
+    settings = get_settings()
+    if settings.db.database_url is not None:
+        return settings.db.database_url.get_secret_value()
+    print_error(
+        "Debes proporcionar --url o definir la variable de entorno DATABASE_URL."
+    )
+    raise typer.Exit(code=1)
 
 
 # ---------------------------------------------------------------------------
