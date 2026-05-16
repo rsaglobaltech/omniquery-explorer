@@ -14,6 +14,7 @@ from omniquery.infrastructure.cache.cached_embedding import CachedEmbeddingPort
 from omniquery.infrastructure.db.adapter_factory import resolve_db_adapter
 from omniquery.infrastructure.db.sql_profiling_adapter import SqlProfilingAdapter
 from omniquery.infrastructure.governance.cost_guard import BudgetTracker
+from omniquery.infrastructure.governance.pii_policy import PiiPolicy
 from omniquery.infrastructure.graph.schema_linker import SchemaLinker
 from omniquery.infrastructure.llm.llm_factory import resolve_llm_adapter
 from omniquery.infrastructure.llm.ollama_embedding_adapter import OllamaEmbeddingAdapter
@@ -55,6 +56,8 @@ class Container:
         # Counters reset on process restart; for durable quotas use a
         # workspace-aware store (see IMPROVEMENTS.md §3.4).
         self._budget = BudgetTracker(self._settings.cost)
+        # Stateless PII policy compiled once from regex settings.
+        self._pii = PiiPolicy(self._settings.pii)
 
     @property
     def settings(self) -> Settings:
@@ -76,6 +79,7 @@ class Container:
             llm=self._llm,
             store=self._store,
             budget=self._budget,
+            pii=self._pii,
         )
 
     def eda_session_graph(self, connection_url: str) -> EdaSessionGraph:

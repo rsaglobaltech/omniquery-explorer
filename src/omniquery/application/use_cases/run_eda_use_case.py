@@ -11,6 +11,7 @@ from omniquery.domain.ports.inbound.eda_use_case import EdaUseCase
 from omniquery.domain.ports.outbound.database_port import DatabasePort
 from omniquery.domain.ports.outbound.llm_port import LlmPort
 from omniquery.infrastructure.governance.cost_guard import BudgetExceeded, BudgetTracker
+from omniquery.infrastructure.governance.pii_policy import PiiPolicy
 from omniquery.infrastructure.persistence.session_store import PersistenceStore
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ class RunEdaUseCase(EdaUseCase):
         llm: LlmPort,
         store: PersistenceStore | None = None,
         budget: BudgetTracker | None = None,
+        pii: PiiPolicy | None = None,
     ) -> None:
         self._db = db
         self._llm = llm
@@ -46,6 +48,10 @@ class RunEdaUseCase(EdaUseCase):
         # The use-case bumps the query counter at the start so even
         # failed runs count against the quota (prevents retry abuse).
         self._budget = budget
+        # PII policy: when present, removes sensitive columns from the
+        # schema before showing it to the LLM and masks them in any
+        # rows we return upstream.
+        self._pii = pii
 
     async def run_eda(self, query: EdaQuery) -> AnalysisResult:
         result = AnalysisResult(question=query.question)
@@ -68,15 +74,20 @@ class RunEdaUseCase(EdaUseCase):
             # Step 1 — Introspect schema
             logger.info("Introspecting schema for: %s", query.connection_url)
             schema = await self._db.get_schema(query.connection_url)
+            # Strip denylisted columns BEFORE the LLM sees the schema.
+            # We keep the raw schema for ourselves (e.g. for the persistence
+            # layer) and only pass the redacted view to generate_sql /
+            # fix_sql / generate_report.
+            llm_schema = self._pii.redact_schema(schema) if self._pii else schema
 
             if self._store is not None:
                 session_id = await self._store.start_session(
                     query.connection_url, schema.engine.value
                 )
 
-            # Step 2 — Generate SQL
+            # Step 2 — Generate SQL using the PII-redacted schema view.
             logger.info("Generating SQL for question: %s", query.question)
-            sql = await self._llm.generate_sql(schema, query)
+            sql = await self._llm.generate_sql(llm_schema, query)
             result.generated_sql = sql
 
             # Step 3 — Execute SQL with retry-on-error loop
@@ -103,18 +114,25 @@ class RunEdaUseCase(EdaUseCase):
                     )
                     if attempt < _MAX_SQL_RETRIES:
                         logger.info("Asking LLM to fix the SQL…")
+                        # Use the redacted schema again — the LLM must not
+                        # see PII columns even during fix attempts.
                         sql = await self._llm.fix_sql(
-                            schema, query, sql, last_error
+                            llm_schema, query, sql, last_error
                         )
                         result.generated_sql = sql
                     else:
                         raise
 
+            # Mask any sensitive values BEFORE they are exposed in the
+            # report prompt or returned to the caller. Note we mask the
+            # in-memory list once and then both reuse paths read masked.
+            if self._pii is not None:
+                rows = self._pii.mask_rows(rows)
             result.raw_data = rows
 
-            # Step 4 — Generate EDA report
+            # Step 4 — Generate EDA report (masked rows + redacted schema)
             logger.info("Generating EDA report (%d rows).", len(rows))
-            report = await self._llm.generate_report(schema, query, rows)
+            report = await self._llm.generate_report(llm_schema, query, rows)
             result.report = report
             status = "ok"
 
