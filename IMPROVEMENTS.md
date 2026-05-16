@@ -12,7 +12,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 
 | # | Iniciativa | Impacto | Esfuerzo | Prioridad | Estado | Commit |
 |---|---|---|---|---|---|---|
-| 1 | Hardening SQL (sqlglot AST + role read-only + timeouts) | Alto | M | P0 | 🟡 | `34a9ba4` (AST hecho; timeouts y rol DB pendientes) |
+| 1 | Hardening SQL (sqlglot AST + role read-only + timeouts) | Alto | M | P0 | 🟡 | `34a9ba4` + `f219d38` (AST y timeouts hechos; rol DB pendiente) |
 | 2 | Multi-LLM provider (OpenAI / Anthropic / Bedrock / Ollama) | Alto | M | P0 | 🟡 | `9aec4e5` (OpenAI + Anthropic hechos; Bedrock/Vertex pendientes) |
 | 3 | FastAPI Web Adapter + SSE streaming | Alto | M | P0 | ✅ | `8705473` |
 | 4 | Persistencia (sesiones, historial, query log) | Alto | M | P0 | ⬜ | — |
@@ -24,7 +24,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | 10 | Cost-guard para LLM y DB (EXPLAIN gate + budget) | Alto | M | P1 | ⬜ | — |
 | 11 | PII masking + column allowlist / denylist por rol | Alto | M | P1 | ⬜ | — |
 | 12 | Dialect-aware SQL emission (LIMIT vs FETCH FIRST, quoting) | Medio | S | P1 | 🟡 | `34a9ba4` (LIMIT/FETCH hecho; quoting/prompts pendientes) |
-| 13 | Connection pool reutilizable + cancelación de queries | Medio | S | P1 | ⬜ | — |
+| 13 | Connection pool reutilizable + cancelación de queries | Medio | S | P1 | 🟡 | `f219d38` (pool LRU hecho; cancelación SSE pendiente) |
 | 14 | UI Web (Next.js o Streamlit) | Alto | L | P2 | ⬜ | — |
 | 15 | Cache semántico de preguntas similares | Medio | M | P2 | ⬜ | — |
 | 16 | Agente de visualización inteligente (Vega-Lite) | Medio | M | P2 | ⬜ | — |
@@ -47,19 +47,21 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-16 | `8705473` | feat(web): FastAPI + SSE + API-key |
 | 2026-05-16 | `e96bcc7` | test: 28 tests nuevos (sql_guard, disk_cache, config, parser) → 102/102 verde |
 | 2026-05-16 | `49e757d` | ci: GitHub Actions + ruff baseline |
+| 2026-05-16 | `978e1cd` | docs: progreso marcado en IMPROVEMENTS.md |
+| 2026-05-16 | `f219d38` | feat(db): pool LRU + statement timeout dialect-aware |
 
 ---
 
 ## 2. Bloque P0 — Lo mínimo para "uso real"
 
-### 2.1 Hardening de SQL — 🟡 parcial (commit `34a9ba4`)
+### 2.1 Hardening de SQL — 🟡 parcial (commits `34a9ba4`, `f219d38`)
 
 Hoy `BaseSQLAdapter._assert_read_only` y `OllamaAdapter._assert_select_only` validan por regex. Esto se puede burlar con CTEs `WITH x AS (DELETE …) SELECT …`, comentarios anidados, statements múltiples, `pg_sleep`, funciones que escriben, etc.
 
 Acciones:
 - ✅ Reemplazar el regex por parseo AST con **sqlglot**. Verificar: una sola sentencia, sólo nodo raíz `Select`/`Union`, sin CTEs con DML, sin llamadas a funciones en lista negra (`pg_sleep`, `dblink`, `lo_import`, `xp_cmdshell`, etc.).
 - ✅ Aplicar `LIMIT` reescribiendo el AST (no concatenando string). Soporta `FETCH FIRST N ROWS ONLY` para Oracle.
-- ⬜ Imponer `statement_timeout` (Postgres) / `MAX_EXECUTION_TIME` (MySQL) / `OCI_ATTR_CALL_TIMEOUT` (Oracle) a nivel de sesión antes de ejecutar.
+- ✅ Imponer `statement_timeout` (Postgres) / `MAX_EXECUTION_TIME` (MySQL) / `asyncio.wait_for` (Oracle fallback) a nivel de sesión antes de ejecutar.
 - ⬜ Documentar y forzar uso de un rol DB **read-only** dedicado (privilegio SELECT estrictamente). El nivel de aplicación es defensa-en-profundidad, no la única barrera.
 - 🟡 Validar tabla y columnas referenciadas contra `schema.table_names` y `schema.get_table().column_names` ANTES de ejecutar; rechazar si el modelo inventó. (Tablas hecho vía `validate_against_schema`; columnas pendiente.)
 
@@ -157,7 +159,9 @@ Hoy hay logging JSON estructurado (bien). Faltan:
 - ⬜ Generar prompts conscientes del dialecto (`schema.engine.value` ya disponible).
 - ✅ Tests por dialecto en `tests/unit/infrastructure/test_sql_guard.py`.
 
-### 3.7 Pool reutilizable — ⬜ pendiente
+### 3.7 Pool reutilizable — 🟡 parcial (commit `f219d38`)
+
+✅ `BaseSQLAdapter` ahora obtiene engines de un pool LRU process-wide (`engine_pool.py`). 🟡 `sql_profiling_adapter` aún crea engine por tabla — pendiente migrar.
 
 `BaseSQLAdapter` crea y descarta `AsyncEngine` por llamada (`get_schema`, `execute_query`, `_row_count`, `_column_info` en `sql_profiling_adapter` …). Reutilizar un pool por `connection_url` en el adapter, con cierre coordinado al apagar el container. Permite además cancelar queries en curso vía `connection.invalidate()`.
 
