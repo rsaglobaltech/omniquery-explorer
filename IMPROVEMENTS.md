@@ -29,7 +29,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | 15 | Cache semántico de preguntas similares | Medio | M | P2 | ⬜ | — |
 | 16 | Agente de visualización inteligente (Vega-Lite) | Medio | M | P2 | ⬜ | — |
 | 17 | Librería de consultas guardadas + colaboración | Medio | M | P2 | ⬜ | — |
-| 18 | CI/CD (GitHub Actions) + Docker image multi-stage | Alto | S | P2 | 🟡 | `49e757d` (CI hecho; Docker pendiente) |
+| 18 | CI/CD (GitHub Actions) + Docker image multi-stage | Alto | S | P2 | 🟡 | `49e757d` + `a8eec4c` (CI + Dockerfile + compose hechos; release pipeline GHCR pendiente) |
 | 19 | Soporte BigQuery, Snowflake, DuckDB, SQLite | Alto | M | P2 | ⬜ | — |
 | 20 | Soporte de joins multi-hop con razonamiento de path | Medio | L | P3 | ⬜ | — |
 
@@ -51,6 +51,7 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-16 | `f219d38` | feat(db): pool LRU + statement timeout dialect-aware |
 | 2026-05-16 | `b8a9ea9` | feat(persistence): SQLite + sessions/queries/reports + hook en use_case |
 | 2026-05-16 | `76ea1a4` | feat(observability): OpenTelemetry spans agent + llm |
+| 2026-05-16 | `a8eec4c` | feat(docker): Dockerfile multi-stage + compose con Ollama |
 
 ---
 
@@ -193,12 +194,12 @@ Hoy `chart_query_results` decide chart por heurística. Sustituir por un agente 
 - Compartir entre usuarios del workspace.
 - Re-ejecutar como reporte programado (cron).
 
-### 4.5 CI/CD + Docker — 🟡 parcial (commit `49e757d`)
+### 4.5 CI/CD + Docker — 🟡 parcial (commits `49e757d`, `a8eec4c`)
 
 - 🟡 `.github/workflows/ci.yml`: lint (ruff hecho), ⬜ typecheck (mypy/pyright), ✅ tests, ⬜ security scan (bandit, pip-audit).
 - ⬜ `.github/workflows/release.yml`: build wheel + Docker image (multi-arch buildx), publish a GHCR.
-- ⬜ `Dockerfile` multi-stage: builder con `uv`, runtime slim, non-root user.
-- ⬜ `docker-compose.yml` que orqueste app + Postgres interno + Ollama opcional.
+- ✅ `Dockerfile` multi-stage: builder con `uv`, runtime slim, non-root user (uid 1000), HEALTHCHECK contra `/health`.
+- ✅ `docker-compose.yml` que orqueste app + Ollama con volúmenes para modelos y persistencia SQLite.
 
 ### 4.6 Más motores
 
@@ -276,8 +277,8 @@ Checklist mínimo de release v1.0:
 
 - [ ] Tests con cobertura ≥70% en `application/` y `infrastructure/` (parcial — falta scoring + use_case)
 - [ ] Pipeline CI verde (lint + typecheck + tests + security scan) — lint+tests hechos; falta typecheck + bandit
-- [ ] Imagen Docker publicada en registry
-- [x] Web API documentada con OpenAPI (auto-FastAPI) — falta `docker compose up`
+- [x] Dockerfile + docker-compose locales (publicación a registry pendiente)
+- [x] Web API documentada con OpenAPI (auto-FastAPI) + `docker compose up`
 - [x] Autenticación por API key activa por defecto
 - [x] SQL guard basado en AST — falta documentar rol DB read-only
 - [ ] Persistencia de sesiones y query log activa
