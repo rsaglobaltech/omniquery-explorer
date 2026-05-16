@@ -67,6 +67,22 @@ class LlmPort(ABC):
         """
 
     @abstractmethod
+    async def chat(self, prompt: str, *, call_name: str = "chat") -> str:
+        """
+        Free-form single-turn chat completion. Used by orchestration
+        agents (question proposal, DB summarisation) that do not need
+        schema-bound prompts.
+
+        Args:
+            prompt:     The user prompt sent to the model.
+            call_name:  Tag used by observability layer to identify the
+                        purpose of the call (e.g. ``propose_questions``).
+
+        Returns:
+            The model's plain-text completion.
+        """
+
+    @abstractmethod
     async def generate_report(
         self,
         schema: DatabaseSchema,

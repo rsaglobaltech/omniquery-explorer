@@ -350,7 +350,7 @@ class EdaSessionGraph:
             "INICIO DE RESPUESTA:"
         )
         logger.info("[propose_questions] Asking LLM to propose questions...")
-        raw = await self._llm._chat(prompt)  # type: ignore[attr-defined]
+        raw = await self._llm.chat(prompt, call_name="propose_questions")
         questions = _parse_proposed_questions(raw)
         return {**state, "proposed_questions": questions}
 
@@ -382,7 +382,7 @@ class EdaSessionGraph:
             + "\n\nResponde SOLO con el párrafo de resumen, sin títulos ni listas."
         )
         logger.info("[summarize] Generating DB summary...")
-        summary = await self._llm._chat(prompt)  # type: ignore[attr-defined]
+        summary = await self._llm.chat(prompt, call_name="summarize_db")
         return {**state, "db_summary": summary.strip()}
 
     async def _node_generate_sql(self, state: EdaSessionState) -> EdaSessionState:

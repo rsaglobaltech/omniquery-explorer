@@ -96,6 +96,9 @@ class OllamaAdapter(LlmPort):
     # LlmPort implementation
     # ------------------------------------------------------------------
 
+    async def chat(self, prompt: str, *, call_name: str = "chat") -> str:
+        return await self._chat(prompt, call_name=call_name)
+
     async def generate_sql(self, schema: DatabaseSchema, query: EdaQuery) -> str:
         # ── Phase A: table selection ──────────────────────────────────────────
         # If semantic hint_tables are already provided (P1 schema linking),

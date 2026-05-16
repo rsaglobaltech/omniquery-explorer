@@ -1,0 +1,178 @@
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+import httpx
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
+from omniquery.domain.entities.database_schema import DatabaseSchema
+from omniquery.domain.entities.eda_query import EdaQuery
+from omniquery.domain.ports.outbound.llm_port import LlmPort
+from omniquery.infrastructure.llm.llm_prompts import (
+    assert_select_only,
+    build_fix_sql_prompt,
+    build_generate_sql_prompt,
+    build_report_prompt,
+    build_table_selection_prompt,
+    extract_sql,
+    extract_table_names,
+    load_system_prompt,
+)
+from omniquery.infrastructure.logging.agent_observability import (
+    get_log_context,
+    get_payload_limit,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _truncate(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[:limit] + "...<truncated>"
+
+
+class OpenAIAdapter(LlmPort):
+    """Chat-completions adapter for OpenAI and OpenAI-compatible endpoints."""
+
+    def __init__(
+        self,
+        model: str,
+        api_key: str,
+        base_url: str = "https://api.openai.com/v1",
+        timeout: float = 120.0,
+        max_retries: int = 3,
+    ) -> None:
+        self._model = model
+        self._api_key = api_key
+        self._base_url = base_url.rstrip("/")
+        self._timeout = timeout
+        self._max_retries = max_retries
+        self._system_prompt = load_system_prompt()
+        self._client = httpx.AsyncClient(timeout=timeout)
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+    # ------------------------------------------------------------------
+    # LlmPort
+    # ------------------------------------------------------------------
+
+    async def chat(self, prompt: str, *, call_name: str = "chat") -> str:
+        return await self._chat(prompt, call_name=call_name)
+
+    async def generate_sql(self, schema: DatabaseSchema, query: EdaQuery) -> str:
+        if query.hint_tables:
+            valid_tables = [t for t in query.hint_tables if schema.get_table(t) is not None]
+        else:
+            raw = await self._chat(
+                build_table_selection_prompt(schema, query), call_name="table_selection"
+            )
+            selected = [t.strip() for t in raw.replace("\n", ",").split(",") if t.strip()]
+            valid_tables = [t for t in selected if schema.get_table(t) is not None]
+
+        verified_ddl = (
+            schema.exact_ddl(valid_tables) if valid_tables else schema.to_ddl_summary()
+        )
+        raw = await self._chat(
+            build_generate_sql_prompt(schema, query, verified_ddl),
+            call_name="generate_sql",
+        )
+        sql = extract_sql(raw)
+        assert_select_only(sql)
+        return sql
+
+    async def fix_sql(
+        self,
+        schema: DatabaseSchema,
+        query: EdaQuery,
+        bad_sql: str,
+        error: str,
+    ) -> str:
+        referenced = extract_table_names(bad_sql)
+        verified_ddl = (
+            schema.exact_ddl(referenced) if referenced else schema.to_ddl_summary()
+        )
+        raw = await self._chat(
+            build_fix_sql_prompt(schema, query, bad_sql, error, verified_ddl),
+            call_name="fix_sql",
+        )
+        sql = extract_sql(raw)
+        assert_select_only(sql)
+        return sql
+
+    async def generate_report(
+        self,
+        schema: DatabaseSchema,
+        query: EdaQuery,
+        results: list[dict[str, Any]],
+    ) -> str:
+        return await self._chat(
+            build_report_prompt(schema, query, results), call_name="generate_report"
+        )
+
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+
+    async def _chat(self, user_content: str, *, call_name: str) -> str:
+        payload = {
+            "model": self._model,
+            "messages": [
+                {"role": "system", "content": self._system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+        }
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(self._max_retries),
+            wait=wait_exponential(multiplier=1, min=1, max=10),
+            retry=retry_if_exception_type(
+                (httpx.HTTPStatusError, httpx.TransportError)
+            ),
+            reraise=True,
+        ):
+            with attempt:
+                response = await self._client.post(
+                    f"{self._base_url}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                )
+                if response.status_code >= 500 or response.status_code == 429:
+                    response.raise_for_status()
+                response.raise_for_status()
+                data = response.json()
+
+        try:
+            content = data["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError, TypeError) as exc:
+            raise RuntimeError(f"Unexpected OpenAI response structure: {data}") from exc
+
+        usage = data.get("usage", {})
+        log_ctx = get_log_context()
+        limit = get_payload_limit()
+        logger.info(
+            "LLM call completed",
+            extra={
+                "session_id": log_ctx.get("session_id"),
+                "agent": log_ctx.get("agent", "llm"),
+                "event": "llm_call",
+                "context": {"model": self._model, "provider": "openai", "call_name": call_name},
+                "tokens": {
+                    "prompt_tokens": usage.get("prompt_tokens"),
+                    "completion_tokens": usage.get("completion_tokens"),
+                    "total_tokens": usage.get("total_tokens"),
+                },
+                "input": {"prompt": _truncate(user_content, limit)},
+                "output": {"response": _truncate(content, limit)},
+            },
+        )
+        return content
