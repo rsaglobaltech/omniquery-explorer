@@ -1,0 +1,40 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: omniquery-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  omniquery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omniquery-web
+    depends_on:
+      ollama:
+        condition: service_started
+    environment:
+      ENVIRONMENT: development
+      LLM_PROVIDER: ollama
+      LLM_MODEL: llama3.2:latest
+      LLM_OLLAMA_BASE_URL: http://ollama:11434
+      OBS_LOG_LEVEL: INFO
+      PERSIST_DATABASE_URL: sqlite+aiosqlite:////data/omniquery.db
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: "8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - omniquery_data:/data
+
+volumes:
+  ollama_models:
+  omniquery_data:

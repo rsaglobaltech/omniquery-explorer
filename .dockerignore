@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+.tmp
+.logs
+.idea
+.pytest_cache
+dbs
+tests/artifacts
+**/__pycache__
+**/*.pyc
+*.png
+docs/pdf
+prompts
+develop-orphan-backup
