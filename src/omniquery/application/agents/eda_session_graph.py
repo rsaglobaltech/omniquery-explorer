@@ -23,6 +23,7 @@ from omniquery.domain.ports.outbound.profiling_port import ProfilingPort
 from omniquery.infrastructure.graph.schema_graph_service import SchemaGraphService
 from omniquery.infrastructure.graph.schema_linker import SchemaLinker
 from omniquery.infrastructure.logging.agent_observability import get_payload_limit, log_context
+from omniquery.infrastructure.observability.tracing import span
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +211,9 @@ class EdaSessionGraph:
         async def _wrapped(state: EdaSessionState) -> EdaSessionState:
             start = time.perf_counter()
             session_id = state.get("session_id", "n/a")
-            with log_context(session_id=session_id, agent=agent_name):
+            with log_context(session_id=session_id, agent=agent_name), span(
+                f"agent.{agent_name}", session_id=session_id, agent=agent_name
+            ):
                 logger.info(
                     "Agent started",
                     extra={

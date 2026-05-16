@@ -13,6 +13,7 @@ from omniquery.domain.entities.database_schema import DatabaseSchema
 from omniquery.domain.entities.eda_query import EdaQuery
 from omniquery.domain.ports.outbound.llm_port import LlmPort
 from omniquery.infrastructure.logging.agent_observability import get_log_context, get_payload_limit
+from omniquery.infrastructure.observability.tracing import span
 
 # Matches anything that is not a SELECT at the top of the LLM response
 _NON_SELECT = re.compile(
@@ -243,11 +244,14 @@ class OllamaAdapter(LlmPort):
             ],
         }
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(
-                f"{self._base_url}/api/chat", json=payload
-            )
-            response.raise_for_status()
+        with span(
+            "llm.call", provider="ollama", model=self._model, call_name=call_name
+        ):
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(
+                    f"{self._base_url}/api/chat", json=payload
+                )
+                response.raise_for_status()
 
         data = response.json()
         usage = _extract_usage(data)

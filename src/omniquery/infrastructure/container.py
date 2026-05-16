@@ -16,6 +16,7 @@ from omniquery.infrastructure.db.sql_profiling_adapter import SqlProfilingAdapte
 from omniquery.infrastructure.graph.schema_linker import SchemaLinker
 from omniquery.infrastructure.llm.llm_factory import resolve_llm_adapter
 from omniquery.infrastructure.llm.ollama_embedding_adapter import OllamaEmbeddingAdapter
+from omniquery.infrastructure.observability.tracing import configure_tracing
 from omniquery.infrastructure.persistence.session_store import PersistenceStore
 
 
@@ -31,6 +32,7 @@ class Container:
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
+        configure_tracing(self._settings.observability)
         self._llm: LlmPort = resolve_llm_adapter(self._settings.llm)
         raw_emb: EmbeddingPort = OllamaEmbeddingAdapter(
             model=self._settings.llm.embedding_model,

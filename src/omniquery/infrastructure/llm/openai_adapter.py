@@ -28,6 +28,7 @@ from omniquery.infrastructure.logging.agent_observability import (
     get_log_context,
     get_payload_limit,
 )
+from omniquery.infrastructure.observability.tracing import span
 
 logger = logging.getLogger(__name__)
 
@@ -132,24 +133,27 @@ class OpenAIAdapter(LlmPort):
             "Content-Type": "application/json",
         }
 
-        async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(self._max_retries),
-            wait=wait_exponential(multiplier=1, min=1, max=10),
-            retry=retry_if_exception_type(
-                (httpx.HTTPStatusError, httpx.TransportError)
-            ),
-            reraise=True,
+        with span(
+            "llm.call", provider="openai", model=self._model, call_name=call_name
         ):
-            with attempt:
-                response = await self._client.post(
-                    f"{self._base_url}/chat/completions",
-                    json=payload,
-                    headers=headers,
-                )
-                if response.status_code >= 500 or response.status_code == 429:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(self._max_retries),
+                wait=wait_exponential(multiplier=1, min=1, max=10),
+                retry=retry_if_exception_type(
+                    (httpx.HTTPStatusError, httpx.TransportError)
+                ),
+                reraise=True,
+            ):
+                with attempt:
+                    response = await self._client.post(
+                        f"{self._base_url}/chat/completions",
+                        json=payload,
+                        headers=headers,
+                    )
+                    if response.status_code >= 500 or response.status_code == 429:
+                        response.raise_for_status()
                     response.raise_for_status()
-                response.raise_for_status()
-                data = response.json()
+                    data = response.json()
 
         try:
             content = data["choices"][0]["message"]["content"].strip()
