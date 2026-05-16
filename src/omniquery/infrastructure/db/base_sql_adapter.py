@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from abc import abstractmethod
 from typing import Any
 
@@ -10,11 +9,10 @@ from omniquery.domain.entities.column import Column, ForeignKey
 from omniquery.domain.entities.database_schema import DatabaseSchema, EngineType
 from omniquery.domain.entities.table import Table
 from omniquery.domain.ports.outbound.database_port import DatabasePort
-
-# Matches any DML / DDL keyword at the start of a statement (after stripping comments)
-_UNSAFE_PATTERN = re.compile(
-    r"^\s*(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE|EXEC|EXECUTE)\b",
-    re.IGNORECASE,
+from omniquery.infrastructure.db.sql_guard import (
+    SqlGuardError,
+    apply_limit,
+    assert_read_only,
 )
 
 
@@ -64,8 +62,12 @@ class BaseSQLAdapter(DatabasePort):
     async def execute_query(
         self, connection_url: str, sql: str, max_rows: int = 500
     ) -> list[dict[str, Any]]:
-        self._assert_read_only(sql)
-        safe_sql = self._apply_limit(sql, max_rows)
+        engine_type = self.engine_type
+        try:
+            assert_read_only(sql, engine_type)
+            safe_sql = apply_limit(sql, max_rows, engine_type)
+        except SqlGuardError as exc:
+            raise ValueError(str(exc)) from exc
 
         engine = create_async_engine(connection_url, echo=False)
         try:
@@ -84,34 +86,19 @@ class BaseSQLAdapter(DatabasePort):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _assert_read_only(sql: str) -> None:
-        """Raise ValueError if sql is not a pure SELECT statement."""
-        clean = re.sub(r"/\*.*?\*/", "", sql, flags=re.DOTALL)
-        clean = re.sub(r"--[^\n]*", "", clean)
-        if _UNSAFE_PATTERN.match(clean):
-            raise ValueError(
-                f"Only SELECT statements are allowed. Received: {sql[:80]!r}"
-            )
+    def _assert_read_only(sql: str, engine: EngineType | None = None) -> None:
+        """Back-compat wrapper around the AST guard."""
+        try:
+            assert_read_only(sql, engine)
+        except SqlGuardError as exc:
+            raise ValueError(str(exc)) from exc
 
     @staticmethod
-    def _apply_limit(sql: str, max_rows: int) -> str:
-        """
-        Safely append LIMIT to a SELECT statement.
-
-        Handles edge cases:
-        - Trailing semicolons or comments added by the LLM
-        - Statements that already contain a LIMIT clause
-        """
-        # Strip trailing whitespace, semicolons and inline comments
-        clean = sql.strip().rstrip(";").strip()
-        # Remove trailing standalone comment lines
-        clean = re.sub(r"\s*--[^\n]*$", "", clean).strip()
-
-        # Already has a LIMIT — respect it (just strip the semicolon)
-        if re.search(r"\bLIMIT\s+\d+", clean, re.IGNORECASE):
-            return clean
-
-        return f"{clean}\nLIMIT {max_rows}"
+    def _apply_limit(
+        sql: str, max_rows: int, engine: EngineType | None = None
+    ) -> str:
+        """Back-compat wrapper around the AST-based limit rewriter."""
+        return apply_limit(sql, max_rows, engine)
 
     @staticmethod
     def _build_column(
