@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+import asyncio
 from abc import abstractmethod
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine
 
+from omniquery.config import get_settings
 from omniquery.domain.entities.column import Column, ForeignKey
 from omniquery.domain.entities.database_schema import DatabaseSchema, EngineType
 from omniquery.domain.entities.table import Table
 from omniquery.domain.ports.outbound.database_port import DatabasePort
+from omniquery.infrastructure.db.engine_pool import AsyncEnginePool, get_default_pool
 from omniquery.infrastructure.db.sql_guard import (
     SqlGuardError,
     apply_limit,
     assert_read_only,
 )
+from omniquery.infrastructure.db.statement_timeout import apply_statement_timeout
 
 
 class BaseSQLAdapter(DatabasePort):
@@ -23,7 +27,14 @@ class BaseSQLAdapter(DatabasePort):
     Subclasses must implement:
         - engine_type  (property)
         - _introspect  (async, returns list[Table])
+
+    Engines are obtained from a process-wide pool keyed by connection URL,
+    so multiple ``get_schema`` / ``execute_query`` calls against the same
+    target reuse the same warm connection pool.
     """
+
+    def __init__(self, pool: AsyncEnginePool | None = None) -> None:
+        self._pool = pool or get_default_pool()
 
     # ------------------------------------------------------------------
     # Abstract interface for subclasses
@@ -47,12 +58,8 @@ class BaseSQLAdapter(DatabasePort):
     # ------------------------------------------------------------------
 
     async def get_schema(self, connection_url: str) -> DatabaseSchema:
-        engine = create_async_engine(connection_url, echo=False)
-        try:
-            tables, db_name = await self._introspect(engine, connection_url)
-        finally:
-            await engine.dispose()
-
+        engine = await self._pool.get(connection_url)
+        tables, db_name = await self._introspect(engine, connection_url)
         return DatabaseSchema(
             engine=self.engine_type,
             tables=tables,
@@ -69,17 +76,23 @@ class BaseSQLAdapter(DatabasePort):
         except SqlGuardError as exc:
             raise ValueError(str(exc)) from exc
 
-        engine = create_async_engine(connection_url, echo=False)
-        try:
+        settings = get_settings()
+        timeout_ms = settings.db.statement_timeout_ms
+        engine = await self._pool.get(connection_url)
+
+        async def _run() -> list[dict[str, Any]]:
             async with engine.connect() as conn:
                 from sqlalchemy import text
 
+                await apply_statement_timeout(conn, engine_type, timeout_ms)
                 result = await conn.execute(text(safe_sql))
                 keys = list(result.keys())
                 rows = result.fetchmany(max_rows)
-                return [dict(zip(keys, row)) for row in rows]
-        finally:
-            await engine.dispose()
+                return [dict(zip(keys, row, strict=False)) for row in rows]
+
+        if engine_type == EngineType.ORACLE and timeout_ms > 0:
+            return await asyncio.wait_for(_run(), timeout=timeout_ms / 1000)
+        return await _run()
 
     # ------------------------------------------------------------------
     # Helpers
