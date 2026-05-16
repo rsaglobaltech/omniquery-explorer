@@ -19,7 +19,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | 5 | Cache de schema, profile y embeddings | Alto | S | P0 | 🟡 | `62095d6` (schema + embeddings; profile pendiente) |
 | 6 | Configuración tipada (Pydantic Settings) + gestión de secretos | Alto | S | P0 | ✅ | `0c08df2` |
 | 7 | Cobertura de tests >70% + harness de evaluación text-to-SQL | Alto | L | P1 | 🟡 | `e96bcc7` (unit tests añadidos; harness eval pendiente) |
-| 8 | Observabilidad: OpenTelemetry + Langfuse | Medio | M | P1 | ⬜ | — |
+| 8 | Observabilidad: OpenTelemetry + Langfuse | Medio | M | P1 | 🟡 | `76ea1a4` (OTel agent + LLM spans; Langfuse + Prometheus pendientes) |
 | 9 | Auth/RBAC + multi-tenant + workspace por usuario | Alto | L | P1 | 🟡 | `8705473` (API-key sólo; multi-tenant pendiente) |
 | 10 | Cost-guard para LLM y DB (EXPLAIN gate + budget) | Alto | M | P1 | ⬜ | — |
 | 11 | PII masking + column allowlist / denylist por rol | Alto | M | P1 | ⬜ | — |
@@ -50,6 +50,7 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-16 | `978e1cd` | docs: progreso marcado en IMPROVEMENTS.md |
 | 2026-05-16 | `f219d38` | feat(db): pool LRU + statement timeout dialect-aware |
 | 2026-05-16 | `b8a9ea9` | feat(persistence): SQLite + sessions/queries/reports + hook en use_case |
+| 2026-05-16 | `76ea1a4` | feat(observability): OpenTelemetry spans agent + llm |
 
 ---
 
@@ -124,7 +125,9 @@ Coverage actual: sólo `schema_linker` y `schema_graph_service`. Falta:
 - ⬜ Harness de evaluación text-to-SQL: dataset propio (~50 preguntas) o porting de **Spider/Bird** subset; métricas: execution accuracy, exact match, ratio de queries que requirieron `fix_sql`, latencia p50/p95 por modelo.
 - ⬜ Smoke test E2E que ejecute `ask` contra `dbs/` muestreado.
 
-### 3.2 Observabilidad — ⬜ pendiente
+### 3.2 Observabilidad — 🟡 parcial (commit `76ea1a4`)
+
+✅ OTel spans en cada nodo LangGraph y en cada llamada LLM. ⬜ Langfuse + Prometheus + dashboards Grafana.
 
 Hoy hay logging JSON estructurado (bien). Faltan:
 - Tracing distribuido con **OpenTelemetry** — un span por nodo del grafo, atributos `session_id`, `agent`, `tokens`, `db_engine`. Export a Jaeger/Tempo.
@@ -279,6 +282,6 @@ Checklist mínimo de release v1.0:
 - [x] SQL guard basado en AST — falta documentar rol DB read-only
 - [ ] Persistencia de sesiones y query log activa
 - [x] Soporte de al menos 2 proveedores LLM además de Ollama (OpenAI + Anthropic)
-- [ ] Trazas OpenTelemetry exportables
+- [x] Trazas OpenTelemetry exportables (vía OTLP/HTTP cuando se habilita)
 - [ ] Documentación de despliegue para una máquina y para Kubernetes
 - [ ] Harness de evaluación text-to-SQL con baseline publicado en README
