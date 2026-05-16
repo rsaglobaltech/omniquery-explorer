@@ -16,6 +16,7 @@ from omniquery.infrastructure.db.sql_profiling_adapter import SqlProfilingAdapte
 from omniquery.infrastructure.graph.schema_linker import SchemaLinker
 from omniquery.infrastructure.llm.llm_factory import resolve_llm_adapter
 from omniquery.infrastructure.llm.ollama_embedding_adapter import OllamaEmbeddingAdapter
+from omniquery.infrastructure.persistence.session_store import PersistenceStore
 
 
 class Container:
@@ -42,6 +43,11 @@ class Container:
         )
         self._schema_linker = SchemaLinker(self._emb)
         self._profiler = SqlProfilingAdapter()
+        self._store = (
+            PersistenceStore(self._settings.persistence)
+            if self._settings.persistence.enabled
+            else None
+        )
 
     @property
     def settings(self) -> Settings:
@@ -53,8 +59,14 @@ class Container:
             self._settings.cache,
         )
 
+    @property
+    def store(self) -> PersistenceStore | None:
+        return self._store
+
     def eda_use_case(self, connection_url: str) -> EdaUseCase:
-        return RunEdaUseCase(db=self._db(connection_url), llm=self._llm)
+        return RunEdaUseCase(
+            db=self._db(connection_url), llm=self._llm, store=self._store
+        )
 
     def eda_session_graph(self, connection_url: str) -> EdaSessionGraph:
         return EdaSessionGraph(

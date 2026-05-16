@@ -58,6 +58,15 @@ class CacheSettings(BaseSettings):
         return v.resolve()
 
 
+class PersistenceSettings(BaseSettings):
+    """Internal persistence (sessions, query log) configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="PERSIST_", extra="ignore")
+
+    enabled: bool = True
+    database_url: str = "sqlite+aiosqlite:///.tmp/omniquery.db"
+
+
 class ObservabilitySettings(BaseSettings):
     """Logging and tracing configuration."""
 
@@ -82,6 +91,7 @@ class Settings(BaseSettings):
     llm: LlmSettings = Field(default_factory=LlmSettings)
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     cache: CacheSettings = Field(default_factory=CacheSettings)
+    persistence: PersistenceSettings = Field(default_factory=PersistenceSettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
 
 
