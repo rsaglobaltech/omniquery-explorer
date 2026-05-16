@@ -21,8 +21,8 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | 7 | Cobertura de tests >70% + harness de evaluación text-to-SQL | Alto | L | P1 | 🟡 | `e96bcc7` (unit tests añadidos; harness eval pendiente) |
 | 8 | Observabilidad: OpenTelemetry + Langfuse | Medio | M | P1 | 🟡 | `76ea1a4` (OTel agent + LLM spans; Langfuse + Prometheus pendientes) |
 | 9 | Auth/RBAC + multi-tenant + workspace por usuario | Alto | L | P1 | 🟡 | `8705473` (API-key sólo; multi-tenant pendiente) |
-| 10 | Cost-guard para LLM y DB (EXPLAIN gate + budget) | Alto | M | P1 | ⬜ | — |
-| 11 | PII masking + column allowlist / denylist por rol | Alto | M | P1 | ⬜ | — |
+| 10 | Cost-guard para LLM y DB (EXPLAIN gate + budget) | Alto | M | P1 | 🟡 | `7ffbee7` (EXPLAIN gate + budget per-session; cost por workspace pendiente) |
+| 11 | PII masking + column allowlist / denylist por rol | Alto | M | P1 | 🟡 | `74c8d32` (denylist + masking hechos; allowlist por rol pendiente) |
 | 12 | Dialect-aware SQL emission (LIMIT vs FETCH FIRST, quoting) | Medio | S | P1 | 🟡 | `34a9ba4` (LIMIT/FETCH hecho; quoting/prompts pendientes) |
 | 13 | Connection pool reutilizable + cancelación de queries | Medio | S | P1 | 🟡 | `f219d38` (pool LRU hecho; cancelación SSE pendiente) |
 | 14 | UI Web (Next.js o Streamlit) | Alto | L | P2 | ⬜ | — |
@@ -52,6 +52,8 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-16 | `b8a9ea9` | feat(persistence): SQLite + sessions/queries/reports + hook en use_case |
 | 2026-05-16 | `76ea1a4` | feat(observability): OpenTelemetry spans agent + llm |
 | 2026-05-16 | `a8eec4c` | feat(docker): Dockerfile multi-stage + compose con Ollama |
+| 2026-05-16 | `7ffbee7` | feat(governance): cost-guard EXPLAIN + budget per-session |
+| 2026-05-16 | `74c8d32` | feat(governance): PII denylist + redact schema + mask rows |
 
 ---
 
@@ -143,13 +145,15 @@ Hoy hay logging JSON estructurado (bien). Faltan:
 - ⬜ Por workspace: conjunto de conexiones DB autorizadas, modelo LLM por defecto, budget mensual.
 - ⬜ Cifrado at-rest de connection URLs (Fernet con clave en KMS).
 
-### 3.4 Cost-guard — ⬜ pendiente
+### 3.4 Cost-guard — 🟡 parcial (commit `7ffbee7`)
 
-- Antes de ejecutar SQL, lanzar `EXPLAIN (FORMAT JSON)` y rechazar si `total_cost` > umbral o si la query toca tablas por encima de N filas sin filtros.
+- ✅ Antes de ejecutar SQL, lanzar `EXPLAIN (FORMAT JSON)` (Postgres) y `EXPLAIN FORMAT=JSON` (MySQL); rechazar si `total_cost` > umbral o si la query toca tablas por encima de N filas. Oracle no soportado por falta de plan JSON portable.
 - Budget por usuario/workspace: tokens LLM por día, queries por hora. Devolver `429` con `Retry-After`.
 - Telemetría de coste estimado por proveedor (precio por 1k tokens hardcoded en config).
 
-### 3.5 PII / governance — ⬜ pendiente
+### 3.5 PII / governance — 🟡 parcial (commit `74c8d32`)
+
+✅ `PiiPolicy` (denylist regex case-insensitive) redacta el schema antes de pasarlo al LLM y enmascara valores en las filas devueltas. ⬜ Allowlist/denylist por rol o workspace. ⬜ Tags semánticos (`@pii` comments / `column_metadata`).
 
 - Política de columnas por nombre y/o por tag DB:
   - Denylist (`email`, `ssn`, `password`, `card_number`, ...): excluidas del DDL pasado al LLM y enmascaradas en resultados (`hash`/`***`).
