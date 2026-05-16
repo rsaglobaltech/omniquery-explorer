@@ -8,69 +8,84 @@ Documento que describe las brechas detectadas entre el estado actual del proyect
 
 ## 1. Tabla resumen — Priorización
 
-| # | Iniciativa | Impacto | Esfuerzo | Prioridad |
-|---|---|---|---|---|
-| 1 | Hardening SQL (sqlglot AST + role read-only + timeouts) | Alto | M | P0 |
-| 2 | Multi-LLM provider (OpenAI / Anthropic / Bedrock / Ollama) | Alto | M | P0 |
-| 3 | FastAPI Web Adapter + SSE streaming | Alto | M | P0 |
-| 4 | Persistencia (sesiones, historial, query log) | Alto | M | P0 |
-| 5 | Cache de schema, profile y embeddings | Alto | S | P0 |
-| 6 | Configuración tipada (Pydantic Settings) + gestión de secretos | Alto | S | P0 |
-| 7 | Cobertura de tests >70% + harness de evaluación text-to-SQL | Alto | L | P1 |
-| 8 | Observabilidad: OpenTelemetry + Langfuse | Medio | M | P1 |
-| 9 | Auth/RBAC + multi-tenant + workspace por usuario | Alto | L | P1 |
-| 10 | Cost-guard para LLM y DB (EXPLAIN gate + budget) | Alto | M | P1 |
-| 11 | PII masking + column allowlist / denylist por rol | Alto | M | P1 |
-| 12 | Dialect-aware SQL emission (LIMIT vs FETCH FIRST, quoting) | Medio | S | P1 |
-| 13 | Connection pool reutilizable + cancelación de queries | Medio | S | P1 |
-| 14 | UI Web (Next.js o Streamlit) | Alto | L | P2 |
-| 15 | Cache semántico de preguntas similares | Medio | M | P2 |
-| 16 | Agente de visualización inteligente (Vega-Lite) | Medio | M | P2 |
-| 17 | Librería de consultas guardadas + colaboración | Medio | M | P2 |
-| 18 | CI/CD (GitHub Actions) + Docker image multi-stage | Alto | S | P2 |
-| 19 | Soporte BigQuery, Snowflake, DuckDB, SQLite | Alto | M | P2 |
-| 20 | Soporte de joins multi-hop con razonamiento de path | Medio | L | P3 |
+Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
+
+| # | Iniciativa | Impacto | Esfuerzo | Prioridad | Estado | Commit |
+|---|---|---|---|---|---|---|
+| 1 | Hardening SQL (sqlglot AST + role read-only + timeouts) | Alto | M | P0 | 🟡 | `34a9ba4` (AST hecho; timeouts y rol DB pendientes) |
+| 2 | Multi-LLM provider (OpenAI / Anthropic / Bedrock / Ollama) | Alto | M | P0 | 🟡 | `9aec4e5` (OpenAI + Anthropic hechos; Bedrock/Vertex pendientes) |
+| 3 | FastAPI Web Adapter + SSE streaming | Alto | M | P0 | ✅ | `8705473` |
+| 4 | Persistencia (sesiones, historial, query log) | Alto | M | P0 | ⬜ | — |
+| 5 | Cache de schema, profile y embeddings | Alto | S | P0 | 🟡 | `62095d6` (schema + embeddings; profile pendiente) |
+| 6 | Configuración tipada (Pydantic Settings) + gestión de secretos | Alto | S | P0 | ✅ | `0c08df2` |
+| 7 | Cobertura de tests >70% + harness de evaluación text-to-SQL | Alto | L | P1 | 🟡 | `e96bcc7` (unit tests añadidos; harness eval pendiente) |
+| 8 | Observabilidad: OpenTelemetry + Langfuse | Medio | M | P1 | ⬜ | — |
+| 9 | Auth/RBAC + multi-tenant + workspace por usuario | Alto | L | P1 | 🟡 | `8705473` (API-key sólo; multi-tenant pendiente) |
+| 10 | Cost-guard para LLM y DB (EXPLAIN gate + budget) | Alto | M | P1 | ⬜ | — |
+| 11 | PII masking + column allowlist / denylist por rol | Alto | M | P1 | ⬜ | — |
+| 12 | Dialect-aware SQL emission (LIMIT vs FETCH FIRST, quoting) | Medio | S | P1 | 🟡 | `34a9ba4` (LIMIT/FETCH hecho; quoting/prompts pendientes) |
+| 13 | Connection pool reutilizable + cancelación de queries | Medio | S | P1 | ⬜ | — |
+| 14 | UI Web (Next.js o Streamlit) | Alto | L | P2 | ⬜ | — |
+| 15 | Cache semántico de preguntas similares | Medio | M | P2 | ⬜ | — |
+| 16 | Agente de visualización inteligente (Vega-Lite) | Medio | M | P2 | ⬜ | — |
+| 17 | Librería de consultas guardadas + colaboración | Medio | M | P2 | ⬜ | — |
+| 18 | CI/CD (GitHub Actions) + Docker image multi-stage | Alto | S | P2 | 🟡 | `49e757d` (CI hecho; Docker pendiente) |
+| 19 | Soporte BigQuery, Snowflake, DuckDB, SQLite | Alto | M | P2 | ⬜ | — |
+| 20 | Soporte de joins multi-hop con razonamiento de path | Medio | L | P3 | ⬜ | — |
 
 Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
+
+### Registro de avances (rama `develop`)
+
+| Fecha | Commit | Alcance |
+|---|---|---|
+| 2026-05-16 | `bf9d5e7` | docs: roadmap inicial |
+| 2026-05-16 | `0c08df2` | feat(config): Pydantic Settings + LLM factory |
+| 2026-05-16 | `34a9ba4` | feat(sql-guard): sqlglot AST + dialect-aware LIMIT/FETCH |
+| 2026-05-16 | `62095d6` | feat(cache): disk cache para schema + embeddings |
+| 2026-05-16 | `9aec4e5` | feat(llm): OpenAI + Anthropic + `chat()` público |
+| 2026-05-16 | `8705473` | feat(web): FastAPI + SSE + API-key |
+| 2026-05-16 | `e96bcc7` | test: 28 tests nuevos (sql_guard, disk_cache, config, parser) → 102/102 verde |
+| 2026-05-16 | `49e757d` | ci: GitHub Actions + ruff baseline |
 
 ---
 
 ## 2. Bloque P0 — Lo mínimo para "uso real"
 
-### 2.1 Hardening de SQL
+### 2.1 Hardening de SQL — 🟡 parcial (commit `34a9ba4`)
 
 Hoy `BaseSQLAdapter._assert_read_only` y `OllamaAdapter._assert_select_only` validan por regex. Esto se puede burlar con CTEs `WITH x AS (DELETE …) SELECT …`, comentarios anidados, statements múltiples, `pg_sleep`, funciones que escriben, etc.
 
 Acciones:
-- Reemplazar el regex por parseo AST con **sqlglot**. Verificar: una sola sentencia, sólo nodo raíz `Select`/`Union`, sin CTEs con DML, sin llamadas a funciones en lista negra (`pg_sleep`, `dblink`, `lo_import`, `xp_cmdshell`, etc.).
-- Aplicar `LIMIT` reescribiendo el AST (no concatenando string). Soporta `FETCH FIRST N ROWS ONLY` para Oracle.
-- Imponer `statement_timeout` (Postgres) / `MAX_EXECUTION_TIME` (MySQL) / `OCI_ATTR_CALL_TIMEOUT` (Oracle) a nivel de sesión antes de ejecutar.
-- Documentar y forzar uso de un rol DB **read-only** dedicado (privilegio SELECT estrictamente). El nivel de aplicación es defensa-en-profundidad, no la única barrera.
-- Validar tabla y columnas referenciadas contra `schema.table_names` y `schema.get_table().column_names` ANTES de ejecutar; rechazar si el modelo invent ó.
+- ✅ Reemplazar el regex por parseo AST con **sqlglot**. Verificar: una sola sentencia, sólo nodo raíz `Select`/`Union`, sin CTEs con DML, sin llamadas a funciones en lista negra (`pg_sleep`, `dblink`, `lo_import`, `xp_cmdshell`, etc.).
+- ✅ Aplicar `LIMIT` reescribiendo el AST (no concatenando string). Soporta `FETCH FIRST N ROWS ONLY` para Oracle.
+- ⬜ Imponer `statement_timeout` (Postgres) / `MAX_EXECUTION_TIME` (MySQL) / `OCI_ATTR_CALL_TIMEOUT` (Oracle) a nivel de sesión antes de ejecutar.
+- ⬜ Documentar y forzar uso de un rol DB **read-only** dedicado (privilegio SELECT estrictamente). El nivel de aplicación es defensa-en-profundidad, no la única barrera.
+- 🟡 Validar tabla y columnas referenciadas contra `schema.table_names` y `schema.get_table().column_names` ANTES de ejecutar; rechazar si el modelo inventó. (Tablas hecho vía `validate_against_schema`; columnas pendiente.)
 
 Archivos: `src/omniquery/infrastructure/db/base_sql_adapter.py`, nuevo módulo `infrastructure/db/sql_guard.py`.
 
-### 2.2 Multi-LLM Provider
+### 2.2 Multi-LLM Provider — 🟡 parcial (commit `9aec4e5`)
 
 `OllamaAdapter` está hardcoded en `Container`. El puerto `LlmPort` ya existe — falta:
-- `OpenAIAdapter`, `AnthropicAdapter`, `BedrockAdapter`, `VertexAdapter` (LangChain unifica esto pero conviene un adapter delgado por consistencia con la capa hexagonal).
-- Factory `resolve_llm_adapter(settings)` paralela a `resolve_db_adapter`.
-- Retry exponencial con `tenacity` para 5xx y rate-limits.
-- Reuso de `httpx.AsyncClient` a nivel adapter (hoy se crea por llamada).
-- Eliminar el acceso a método "privado" `self._llm._chat(prompt)` desde `eda_session_graph.py` (líneas 353, 385) — exponer un método público `chat(prompt)` en `LlmPort` o crear `LlmPort.propose_questions(...)`/`summarize_db(...)` para no romper la abstracción.
+- 🟡 `OpenAIAdapter`, `AnthropicAdapter`, ⬜ `BedrockAdapter`, ⬜ `VertexAdapter` (LangChain unifica esto pero conviene un adapter delgado por consistencia con la capa hexagonal).
+- ✅ Factory `resolve_llm_adapter(settings)` paralela a `resolve_db_adapter`.
+- ✅ Retry exponencial con `tenacity` para 5xx y rate-limits.
+- 🟡 Reuso de `httpx.AsyncClient` a nivel adapter (hoy se crea por llamada). (OpenAI y Anthropic reúsan; Ollama todavía crea por call.)
+- ✅ Eliminar el acceso a método "privado" `self._llm._chat(prompt)` desde `eda_session_graph.py` — `LlmPort.chat()` público añadido.
 
-### 2.3 FastAPI Web Adapter
+### 2.3 FastAPI Web Adapter — ✅ hecho (commit `8705473`)
 
 Dep ya instalada (`fastapi`, `uvicorn`). Añadir:
-- `src/omniquery/adapters/web/` con rutas:
-  - `POST /sessions` → crea `connection_url` por sesión (cifrado en server-side).
-  - `POST /sessions/{id}/ask` → SSE streaming de eventos LangGraph (un evento por nodo del grafo, payload con `agent`, `status`, `delta`).
-  - `GET /sessions/{id}/schema`, `/profile`, `/suggest`.
-- Reutilizar `Container.eda_session_graph()` (ya pensado como singleton compartible).
-- Servir CORS limitado y rate-limit por IP/API key.
-- Manejo de cancelación con `asyncio.CancelledError` para liberar conexiones DB cuando el cliente cierra el SSE.
+- ✅ `src/omniquery/adapters/web/` con rutas:
+  - ✅ `POST /ask` (JSON) y `POST /ask/stream` (SSE con eventos `started`/`sql`/`rows`/`report`/`done`/`error`).
+  - ✅ `POST /explore`, `POST /schema`, `GET /health`.
+- ✅ Reutilizar `Container.eda_session_graph()` (singleton compartible).
+- ✅ CORS configurado y dependencia `X-API-Key` para writes.
+- ⬜ Rate-limit por IP/API key (pendiente).
+- ⬜ Manejo de cancelación con `asyncio.CancelledError` para liberar conexiones DB cuando el cliente cierra el SSE.
 
-### 2.4 Persistencia
+### 2.4 Persistencia — ⬜ pendiente
 
 Hoy no hay nada persistido. Para uso real necesitamos:
 - Tabla `sessions(id, user_id, connection_url_ref, created_at, …)`.
@@ -80,33 +95,33 @@ Hoy no hay nada persistido. Para uso real necesitamos:
 - `cached_schemas(connection_fingerprint, schema_json, ttl)`.
 - Implementación con SQLAlchemy async sobre un Postgres "interno" (separado del DB analizado). Alembic para migraciones.
 
-### 2.5 Cache
+### 2.5 Cache — 🟡 parcial (commit `62095d6`)
 
 `get_schema` y `profile_all` se ejecutan en cada invocación CLI. En un esquema con cientos de tablas, el profiling es costoso (`COUNT(*)`, `COUNT(DISTINCT)` por columna). Acciones:
-- `SchemaCache` con clave `sha256(connection_url + db_name)` y TTL.
-- `ProfileCache` con la misma clave + nombre de tabla; invalidación manual o por TTL configurable.
-- `EmbeddingCache` para `SchemaLinker` (hoy embebe cada columna en cada `rank_tables`). Persistir embeddings serializados (sqlite + numpy `.npz` o pgvector).
+- ✅ `SchemaCache` con clave `sha256(connection_url + db_name)` y TTL.
+- ⬜ `ProfileCache` con la misma clave + nombre de tabla; invalidación manual o por TTL configurable.
+- ✅ `EmbeddingCache` para `SchemaLinker` (hoy embebe cada columna en cada `rank_tables`). Persistido vía pickle/disco (mejora futura: pgvector).
 
-### 2.6 Configuración y secretos
+### 2.6 Configuración y secretos — ✅ hecho (commit `0c08df2`)
 
 Hoy: `os.getenv` desperdigado en `container.py` y `cli/main.py`. Mejorar:
-- `src/omniquery/config.py` con `Settings(BaseSettings)` de Pydantic v2 — fuentes: env, `.env`, `secrets/`.
-- Soporte para resolver `DATABASE_URL` desde AWS Secrets Manager / Vault / `pass` mediante un proveedor pluggable (`SecretProvider`).
-- Validar al arranque que la URL no incluye credenciales en texto plano si `ENV=production`.
+- ✅ `src/omniquery/config.py` con `Settings(BaseSettings)` de Pydantic v2 — fuentes: env, `.env`.
+- ⬜ Soporte para resolver `DATABASE_URL` desde AWS Secrets Manager / Vault / `pass` mediante un proveedor pluggable (`SecretProvider`).
+- ⬜ Validar al arranque que la URL no incluye credenciales en texto plano si `ENV=production`.
 
 ---
 
 ## 3. Bloque P1 — Robustez de producto
 
-### 3.1 Tests + Evaluación
+### 3.1 Tests + Evaluación — 🟡 parcial (commit `e96bcc7`)
 
 Coverage actual: sólo `schema_linker` y `schema_graph_service`. Falta:
-- Unit tests para `BaseSQLAdapter._apply_limit`, `_assert_read_only`, `OllamaAdapter._extract_sql`, parser de `_parse_proposed_questions`, scoring en `SchemaGraphService.score_tables`.
-- Integration tests con `pytest-postgresql` o `testcontainers` (Postgres + MySQL + Oracle XE).
-- Harness de evaluación text-to-SQL: dataset propio (~50 preguntas) o porting de **Spider/Bird** subset; métricas: execution accuracy, exact match, ratio de queries que requirieron `fix_sql`, latencia p50/p95 por modelo.
-- Smoke test E2E que ejecute `ask` contra `dbs/` muestreado.
+- 🟡 Unit tests para `BaseSQLAdapter._apply_limit`, `_assert_read_only`, `OllamaAdapter._extract_sql`, parser de `_parse_proposed_questions`, scoring en `SchemaGraphService.score_tables`. (Hecho: sql_guard, disk_cache, config, parser. Falta: scoring, `_extract_sql`.)
+- ⬜ Integration tests con `pytest-postgresql` o `testcontainers` (Postgres + MySQL + Oracle XE).
+- ⬜ Harness de evaluación text-to-SQL: dataset propio (~50 preguntas) o porting de **Spider/Bird** subset; métricas: execution accuracy, exact match, ratio de queries que requirieron `fix_sql`, latencia p50/p95 por modelo.
+- ⬜ Smoke test E2E que ejecute `ask` contra `dbs/` muestreado.
 
-### 3.2 Observabilidad
+### 3.2 Observabilidad — ⬜ pendiente
 
 Hoy hay logging JSON estructurado (bien). Faltan:
 - Tracing distribuido con **OpenTelemetry** — un span por nodo del grafo, atributos `session_id`, `agent`, `tokens`, `db_engine`. Export a Jaeger/Tempo.
@@ -114,20 +129,20 @@ Hoy hay logging JSON estructurado (bien). Faltan:
 - Integración con **Langfuse** o **Phoenix** para traza específica de LLM (prompts, respuestas, costo estimado).
 - Dashboards Grafana embebidos en `docs/grafana/`.
 
-### 3.3 Auth + multi-tenant
+### 3.3 Auth + multi-tenant — 🟡 parcial (commit `8705473`)
 
-- API Key + JWT (Auth0/Cognito/Keycloak/casdoor — adapter pluggable).
-- `User`, `Workspace`, `Membership` en la BD interna.
-- Por workspace: conjunto de conexiones DB autorizadas, modelo LLM por defecto, budget mensual.
-- Cifrado at-rest de connection URLs (Fernet con clave en KMS).
+- 🟡 API Key (hecho) + JWT (Auth0/Cognito/Keycloak/casdoor — adapter pluggable, pendiente).
+- ⬜ `User`, `Workspace`, `Membership` en la BD interna.
+- ⬜ Por workspace: conjunto de conexiones DB autorizadas, modelo LLM por defecto, budget mensual.
+- ⬜ Cifrado at-rest de connection URLs (Fernet con clave en KMS).
 
-### 3.4 Cost-guard
+### 3.4 Cost-guard — ⬜ pendiente
 
 - Antes de ejecutar SQL, lanzar `EXPLAIN (FORMAT JSON)` y rechazar si `total_cost` > umbral o si la query toca tablas por encima de N filas sin filtros.
 - Budget por usuario/workspace: tokens LLM por día, queries por hora. Devolver `429` con `Retry-After`.
 - Telemetría de coste estimado por proveedor (precio por 1k tokens hardcoded en config).
 
-### 3.5 PII / governance
+### 3.5 PII / governance — ⬜ pendiente
 
 - Política de columnas por nombre y/o por tag DB:
   - Denylist (`email`, `ssn`, `password`, `card_number`, ...): excluidas del DDL pasado al LLM y enmascaradas en resultados (`hash`/`***`).
@@ -135,14 +150,14 @@ Hoy hay logging JSON estructurado (bien). Faltan:
 - Auditoría: cada `execute_query` queda registrado con `user_id`, `question`, `sql`, `rows_returned`.
 - Soporte para etiquetas semánticas (column comments tipo `@pii` o tabla `column_metadata`).
 
-### 3.6 Dialect-aware SQL
+### 3.6 Dialect-aware SQL — 🟡 parcial (commit `34a9ba4`)
 
 `_apply_limit` añade `LIMIT N` siempre — falla en Oracle (`FETCH FIRST n ROWS ONLY`) y SQL Server (`TOP n`). Acciones:
-- Reescribir vía `sqlglot.transpile(sql, read="postgres", write=engine.value)`.
-- Generar prompts conscientes del dialecto (`schema.engine.value` ya disponible).
-- Tests por dialecto.
+- ✅ Reescribir vía AST sqlglot — Oracle usa `FETCH FIRST`, Postgres/MySQL `LIMIT`.
+- ⬜ Generar prompts conscientes del dialecto (`schema.engine.value` ya disponible).
+- ✅ Tests por dialecto en `tests/unit/infrastructure/test_sql_guard.py`.
 
-### 3.7 Pool reutilizable
+### 3.7 Pool reutilizable — ⬜ pendiente
 
 `BaseSQLAdapter` crea y descarta `AsyncEngine` por llamada (`get_schema`, `execute_query`, `_row_count`, `_column_info` en `sql_profiling_adapter` …). Reutilizar un pool por `connection_url` en el adapter, con cierre coordinado al apagar el container. Permite además cancelar queries en curso vía `connection.invalidate()`.
 
@@ -170,12 +185,12 @@ Hoy `chart_query_results` decide chart por heurística. Sustituir por un agente 
 - Compartir entre usuarios del workspace.
 - Re-ejecutar como reporte programado (cron).
 
-### 4.5 CI/CD + Docker
+### 4.5 CI/CD + Docker — 🟡 parcial (commit `49e757d`)
 
-- `.github/workflows/ci.yml`: lint (ruff), typecheck (mypy/pyright), tests, security scan (bandit, pip-audit).
-- `.github/workflows/release.yml`: build wheel + Docker image (multi-arch buildx), publish a GHCR.
-- `Dockerfile` multi-stage: builder con `uv`, runtime slim, non-root user.
-- `docker-compose.yml` que orqueste app + Postgres interno + Ollama opcional.
+- 🟡 `.github/workflows/ci.yml`: lint (ruff hecho), ⬜ typecheck (mypy/pyright), ✅ tests, ⬜ security scan (bandit, pip-audit).
+- ⬜ `.github/workflows/release.yml`: build wheel + Docker image (multi-arch buildx), publish a GHCR.
+- ⬜ `Dockerfile` multi-stage: builder con `uv`, runtime slim, non-root user.
+- ⬜ `docker-compose.yml` que orqueste app + Postgres interno + Ollama opcional.
 
 ### 4.6 Más motores
 
@@ -251,14 +266,14 @@ A partir de aquí: UI Web, multi-tenant completo, soporte BigQuery/Snowflake, ca
 
 Checklist mínimo de release v1.0:
 
-- [ ] Tests con cobertura ≥70% en `application/` y `infrastructure/`
-- [ ] Pipeline CI verde (lint + typecheck + tests + security scan)
+- [ ] Tests con cobertura ≥70% en `application/` y `infrastructure/` (parcial — falta scoring + use_case)
+- [ ] Pipeline CI verde (lint + typecheck + tests + security scan) — lint+tests hechos; falta typecheck + bandit
 - [ ] Imagen Docker publicada en registry
-- [ ] Web API documentada con OpenAPI y desplegable con `docker compose up`
-- [ ] Autenticación por API key activa por defecto
-- [ ] SQL guard basado en AST + uso forzado de rol DB read-only documentado
+- [x] Web API documentada con OpenAPI (auto-FastAPI) — falta `docker compose up`
+- [x] Autenticación por API key activa por defecto
+- [x] SQL guard basado en AST — falta documentar rol DB read-only
 - [ ] Persistencia de sesiones y query log activa
-- [ ] Soporte de al menos 2 proveedores LLM además de Ollama
+- [x] Soporte de al menos 2 proveedores LLM además de Ollama (OpenAI + Anthropic)
 - [ ] Trazas OpenTelemetry exportables
 - [ ] Documentación de despliegue para una máquina y para Kubernetes
 - [ ] Harness de evaluación text-to-SQL con baseline publicado en README
