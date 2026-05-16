@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS `streaming_subs_subscription_cohort_analysis_data_dictionary` (`field` LONGTEXT,`description` LONGTEXT);
+LOAD DATA LOCAL INFILE '/Users/alejandro/PycharmProjects/omniquery-explorer/.tmp/aws_import/streaming_video_subscriptions/Subscription Cohort Analysis Data Dictionary.csv' INTO TABLE `streaming_subs_subscription_cohort_analysis_data_dictionary` CHARACTER SET utf8mb4 FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '
+' IGNORE 1 LINES (`field`,`description`);
+CREATE TABLE IF NOT EXISTS `streaming_subs_subscription_cohort_analysis_data` (`customer_id` LONGTEXT,`created_date` LONGTEXT,`canceled_date` LONGTEXT,`subscription_cost` LONGTEXT,`subscription_interval` LONGTEXT,`was_subscription_paid` LONGTEXT);
+LOAD DATA LOCAL INFILE '/Users/alejandro/PycharmProjects/omniquery-explorer/.tmp/aws_import/streaming_video_subscriptions/Subscription Cohort Analysis Data.csv' INTO TABLE `streaming_subs_subscription_cohort_analysis_data` CHARACTER SET utf8mb4 FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '
+' IGNORE 1 LINES (`customer_id`,`created_date`,`canceled_date`,`subscription_cost`,`subscription_interval`,`was_subscription_paid`);

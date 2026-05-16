@@ -38,6 +38,7 @@ from omniquery.adapters.cli.console import (
 from omniquery.adapters.cli.charts import chart_query_results, chart_profile_scores
 from omniquery.domain.entities.eda_query import EdaQuery
 from omniquery.infrastructure.container import get_container
+from omniquery.infrastructure.logging.agent_observability import configure_logging
 
 app = typer.Typer(
     name="omniquery",
@@ -64,6 +65,7 @@ def _require_url(url: Optional[str]) -> str:
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context) -> None:
     """Muestra el banner si no se pasa ningún subcomando."""
+    configure_logging()
     if ctx.invoked_subcommand is None:
         print_banner()
         console.print("\nEjecuta [bold cyan]omniquery --help[/bold cyan] para ver los comandos disponibles.\n")

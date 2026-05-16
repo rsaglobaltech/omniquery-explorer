@@ -123,7 +123,10 @@ run_postgres_import() {
     base="$(basename "$csv" .csv)"
     table="$(sanitize_identifier "${TABLE_PREFIX}_${base}")"
 
-    mapfile -t cols < <(read_columns_from_csv "$csv")
+    cols=()
+    while IFS= read -r c; do
+      cols+=("$c")
+    done < <(read_columns_from_csv "$csv")
     if [[ "${#cols[@]}" -eq 0 ]]; then
       log "Saltando (sin cabecera): $csv"
       continue
@@ -162,6 +165,8 @@ run_mysql_import() {
   : "${AWS_MYSQL_USER:?Define AWS_MYSQL_USER}"
   : "${AWS_MYSQL_PASSWORD:?Define AWS_MYSQL_PASSWORD}"
   local mysql_port="${AWS_MYSQL_PORT:-3306}"
+  local mysql_ssl_mode="${AWS_MYSQL_SSL_MODE:-}"
+  local mysql_ssl_ca="${AWS_MYSQL_SSL_CA:-}"
 
   local dataset_dir
   dataset_dir="$(extract_dataset)"
@@ -174,7 +179,10 @@ run_mysql_import() {
     base="$(basename "$csv" .csv)"
     table="$(sanitize_identifier "${TABLE_PREFIX}_${base}")"
 
-    mapfile -t cols < <(read_columns_from_csv "$csv")
+    cols=()
+    while IFS= read -r c; do
+      cols+=("$c")
+    done < <(read_columns_from_csv "$csv")
     if [[ "${#cols[@]}" -eq 0 ]]; then
       log "Saltando (sin cabecera): $csv"
       continue
@@ -184,8 +192,8 @@ run_mysql_import() {
     local col_refs=()
     local c
     for c in "${cols[@]}"; do
-      col_defs+=("`${c}` LONGTEXT")
-      col_refs+=("`${c}`")
+      col_defs+=("\`${c}\` LONGTEXT")
+      col_refs+=("\`${c}\`")
     done
 
     local csv_escaped
@@ -197,12 +205,27 @@ run_mysql_import() {
     } >>"$sql_file"
   done < <(collect_csv_files "$dataset_dir")
 
-  MYSQL_PWD="$AWS_MYSQL_PASSWORD" mysql \
-    --host "$AWS_MYSQL_HOST" \
-    --port "$mysql_port" \
-    --user "$AWS_MYSQL_USER" \
-    --database "$AWS_MYSQL_DB" \
-    --local-infile=1 <"$sql_file"
+  local mysql_cmd=(
+    --host "$AWS_MYSQL_HOST"
+    --port "$mysql_port"
+    --user "$AWS_MYSQL_USER"
+    --database "$AWS_MYSQL_DB"
+    --local-infile=1
+  )
+
+  if [[ -n "$mysql_ssl_mode" ]]; then
+    mysql_cmd+=(--ssl-mode="$mysql_ssl_mode")
+  fi
+
+  if [[ -n "$mysql_ssl_ca" ]]; then
+    if [[ ! -f "$mysql_ssl_ca" ]]; then
+      echo "No existe AWS_MYSQL_SSL_CA: $mysql_ssl_ca" >&2
+      exit 1
+    fi
+    mysql_cmd+=(--ssl-ca="$mysql_ssl_ca")
+  fi
+
+  MYSQL_PWD="$AWS_MYSQL_PASSWORD" mysql "${mysql_cmd[@]}" <"$sql_file"
 }
 
 run_oracle_import() {
@@ -227,7 +250,10 @@ run_oracle_import() {
     base="$(basename "$csv" .csv)"
     table="$(sanitize_identifier "${TABLE_PREFIX}_${base}")"
 
-    mapfile -t cols < <(read_columns_from_csv "$csv")
+    cols=()
+    while IFS= read -r c; do
+      cols+=("$c")
+    done < <(read_columns_from_csv "$csv")
     if [[ "${#cols[@]}" -eq 0 ]]; then
       log "Saltando (sin cabecera): $csv"
       continue
