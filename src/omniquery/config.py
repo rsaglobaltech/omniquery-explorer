@@ -67,6 +67,53 @@ class PersistenceSettings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///.tmp/omniquery.db"
 
 
+class CostGuardSettings(BaseSettings):
+    """Cost-guard thresholds (P1.10).
+
+    Used by the SQL execution path to reject queries whose estimated cost
+    or row scan is unreasonable, and to cap per-session usage.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="COST_", extra="ignore")
+
+    # Enable EXPLAIN-based plan inspection before executing the query.
+    # Disabled by default since some users may not grant EXPLAIN privileges.
+    explain_enabled: bool = False
+    # Reject when the planner estimates higher cost than this (Postgres cost units).
+    max_plan_cost: float = 1_000_000.0
+    # Reject when the planner estimates scanning more than this many rows.
+    max_plan_rows: int = 50_000_000
+    # Per-session caps tracked in-process; reset on container restart.
+    max_queries_per_session: int = 100
+    max_tokens_per_session: int = 1_000_000
+
+
+class PiiSettings(BaseSettings):
+    """PII masking policy (P1.11).
+
+    Columns matched by ``denylist_patterns`` (case-insensitive regex) are:
+    - excluded from the schema DDL fed to the LLM, and
+    - masked in any rows returned to the caller.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="PII_", extra="ignore")
+
+    enabled: bool = True
+    # Comma-separated regex list (parsed in PiiPolicy). Default covers
+    # the most common sensitive identifiers.
+    denylist_patterns: str = (
+        r"^(email|email_address|e_mail|password|passwd|pwd|"
+        r"ssn|social_security|tax_id|nif|cpf|"
+        r"credit_card|card_number|cvv|cvc|iban|bic|swift|"
+        r"phone|phone_number|telephone|mobile|"
+        r"address|street|postal_code|zip_code|"
+        r"birth_date|date_of_birth|dob|"
+        r"api_key|secret|token|access_token|refresh_token)$"
+    )
+    # Replacement token shown instead of the real value.
+    mask_value: str = "***"
+
+
 class ObservabilitySettings(BaseSettings):
     """Logging and tracing configuration."""
 
@@ -93,6 +140,8 @@ class Settings(BaseSettings):
     cache: CacheSettings = Field(default_factory=CacheSettings)
     persistence: PersistenceSettings = Field(default_factory=PersistenceSettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
+    cost: CostGuardSettings = Field(default_factory=CostGuardSettings)
+    pii: PiiSettings = Field(default_factory=PiiSettings)
 
 
 @lru_cache(maxsize=1)

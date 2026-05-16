@@ -10,6 +10,7 @@ from omniquery.domain.entities.eda_query import EdaQuery
 from omniquery.domain.ports.inbound.eda_use_case import EdaUseCase
 from omniquery.domain.ports.outbound.database_port import DatabasePort
 from omniquery.domain.ports.outbound.llm_port import LlmPort
+from omniquery.infrastructure.governance.cost_guard import BudgetExceeded, BudgetTracker
 from omniquery.infrastructure.persistence.session_store import PersistenceStore
 
 logger = logging.getLogger(__name__)
@@ -36,10 +37,15 @@ class RunEdaUseCase(EdaUseCase):
         db: DatabasePort,
         llm: LlmPort,
         store: PersistenceStore | None = None,
+        budget: BudgetTracker | None = None,
     ) -> None:
         self._db = db
         self._llm = llm
         self._store = store
+        # Optional in-process budget tracker — caps per-session usage.
+        # The use-case bumps the query counter at the start so even
+        # failed runs count against the quota (prevents retry abuse).
+        self._budget = budget
 
     async def run_eda(self, query: EdaQuery) -> AnalysisResult:
         result = AnalysisResult(question=query.question)
@@ -49,6 +55,16 @@ class RunEdaUseCase(EdaUseCase):
         session_id = ""
 
         try:
+            # Enforce per-session budget early. Use connection_url as the
+            # bucket key when no explicit session ID is provided. If the
+            # budget is exhausted, fail fast before doing any DB or LLM work.
+            if self._budget is not None:
+                try:
+                    self._budget.register_query(query.connection_url)
+                except BudgetExceeded as bx:
+                    result.error = str(bx)
+                    return result
+
             # Step 1 — Introspect schema
             logger.info("Introspecting schema for: %s", query.connection_url)
             schema = await self._db.get_schema(query.connection_url)

@@ -18,6 +18,10 @@ from omniquery.infrastructure.db.sql_guard import (
     assert_read_only,
 )
 from omniquery.infrastructure.db.statement_timeout import apply_statement_timeout
+from omniquery.infrastructure.governance.cost_guard import (
+    CostGuardError,
+    explain_and_check,
+)
 
 
 class BaseSQLAdapter(DatabasePort):
@@ -84,7 +88,20 @@ class BaseSQLAdapter(DatabasePort):
             async with engine.connect() as conn:
                 from sqlalchemy import text
 
+                # Apply per-statement timeout BEFORE running anything heavy
+                # so even the EXPLAIN itself is bounded.
                 await apply_statement_timeout(conn, engine_type, timeout_ms)
+                # Cost-guard: ask the planner if this query is reasonable.
+                # No-op when explain_enabled is false or engine is Oracle.
+                try:
+                    await explain_and_check(
+                        conn, engine_type, safe_sql, settings.cost
+                    )
+                except CostGuardError as exc:
+                    # Surface as ValueError so the use-case retry loop
+                    # treats it as a non-retryable validation failure.
+                    raise ValueError(str(exc)) from exc
+
                 result = await conn.execute(text(safe_sql))
                 keys = list(result.keys())
                 rows = result.fetchmany(max_rows)

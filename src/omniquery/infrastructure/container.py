@@ -13,6 +13,7 @@ from omniquery.infrastructure.cache.cached_database import CachedDatabasePort
 from omniquery.infrastructure.cache.cached_embedding import CachedEmbeddingPort
 from omniquery.infrastructure.db.adapter_factory import resolve_db_adapter
 from omniquery.infrastructure.db.sql_profiling_adapter import SqlProfilingAdapter
+from omniquery.infrastructure.governance.cost_guard import BudgetTracker
 from omniquery.infrastructure.graph.schema_linker import SchemaLinker
 from omniquery.infrastructure.llm.llm_factory import resolve_llm_adapter
 from omniquery.infrastructure.llm.ollama_embedding_adapter import OllamaEmbeddingAdapter
@@ -50,6 +51,10 @@ class Container:
             if self._settings.persistence.enabled
             else None
         )
+        # Single in-process budget tracker shared by every use-case call.
+        # Counters reset on process restart; for durable quotas use a
+        # workspace-aware store (see IMPROVEMENTS.md §3.4).
+        self._budget = BudgetTracker(self._settings.cost)
 
     @property
     def settings(self) -> Settings:
@@ -67,7 +72,10 @@ class Container:
 
     def eda_use_case(self, connection_url: str) -> EdaUseCase:
         return RunEdaUseCase(
-            db=self._db(connection_url), llm=self._llm, store=self._store
+            db=self._db(connection_url),
+            llm=self._llm,
+            store=self._store,
+            budget=self._budget,
         )
 
     def eda_session_graph(self, connection_url: str) -> EdaSessionGraph:
