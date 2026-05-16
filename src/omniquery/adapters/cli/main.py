@@ -18,12 +18,12 @@ Environment variables:
 """
 
 import asyncio
-from typing import Optional
 
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table as RichTable
 
+from omniquery.adapters.cli.charts import chart_profile_scores, chart_query_results
 from omniquery.adapters.cli.console import (
     console,
     print_banner,
@@ -34,7 +34,6 @@ from omniquery.adapters.cli.console import (
     print_sql,
     print_success,
 )
-from omniquery.adapters.cli.charts import chart_query_results, chart_profile_scores
 from omniquery.config import get_settings
 from omniquery.domain.entities.eda_query import EdaQuery
 from omniquery.infrastructure.container import get_container
@@ -48,7 +47,7 @@ app = typer.Typer(
 )
 
 
-def _require_url(url: Optional[str]) -> str:
+def _require_url(url: str | None) -> str:
     if url:
         return url
     settings = get_settings()
@@ -76,7 +75,7 @@ def main(ctx: typer.Context) -> None:
 @app.command()
 def ask(
     question: str = typer.Argument(..., help="Pregunta en lenguaje natural."),
-    url: Optional[str] = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
+    url: str | None = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
     max_rows: int = typer.Option(500, "--max-rows", "-n", help="Máximo de filas a recuperar."),
     show_data: bool = typer.Option(True, "--show-data", help="Muestra la tabla de datos crudos."),
 ) -> None:
@@ -92,9 +91,9 @@ def ask(
 
 @app.command()
 def explore(
-    url: Optional[str] = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
+    url: str | None = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
     max_rows: int = typer.Option(500, "--max-rows", "-n", help="Máximo de filas por consulta."),
-    question: Optional[str] = typer.Option(None, "--question", "-q", help="Pregunta a responder (si se omite, usa la mejor propuesta)."),
+    question: str | None = typer.Option(None, "--question", "-q", help="Pregunta a responder (si se omite, usa la mejor propuesta)."),
 ) -> None:
     """
     Sesión EDA completa: descubre el esquema, perfila tablas, propone preguntas,
@@ -110,7 +109,7 @@ def explore(
 
 @app.command()
 def suggest(
-    url: Optional[str] = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
+    url: str | None = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
 ) -> None:
     """
     Descubre el esquema, perfila las tablas clave y propone preguntas EDA relevantes.
@@ -124,7 +123,7 @@ def suggest(
 
 @app.command()
 def profile(
-    url: Optional[str] = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
+    url: str | None = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
     top: int = typer.Option(15, "--top", "-t", help="Número de tablas top a mostrar."),
 ) -> None:
     """
@@ -139,7 +138,7 @@ def profile(
 
 @app.command()
 def schema(
-    url: Optional[str] = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
+    url: str | None = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
 ) -> None:
     """
     Imprime el esquema de la base de datos (tablas, columnas, PKs, FKs).
@@ -187,7 +186,7 @@ async def _run_ask(
 
 
 async def _run_explore(
-    connection_url: str, max_rows: int, question: Optional[str]
+    connection_url: str, max_rows: int, question: str | None
 ) -> None:
     print_banner()
     container = get_container()
@@ -285,10 +284,11 @@ async def _run_profile(connection_url: str, top: int) -> None:
     ) as progress:
         task = progress.add_task("📐 Perfilando tablas…", total=None)
 
+        import re
+
         from omniquery.infrastructure.db.adapter_factory import resolve_db_adapter
         from omniquery.infrastructure.db.sql_profiling_adapter import SqlProfilingAdapter
         from omniquery.infrastructure.graph.schema_graph_service import SchemaGraphService
-        import re
 
         adapter = resolve_db_adapter(connection_url)
         db_schema = await adapter.get_schema(connection_url)

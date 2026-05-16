@@ -12,7 +12,6 @@ These tests verify:
 """
 from __future__ import annotations
 
-import math
 import pytest
 
 from omniquery.domain.entities.column import Column, ForeignKey
@@ -20,7 +19,6 @@ from omniquery.domain.entities.database_schema import DatabaseSchema, EngineType
 from omniquery.domain.entities.table import Table
 from omniquery.infrastructure.graph.schema_linker import SchemaLinker
 from tests.conftest import DeterministicEmbeddingPort
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

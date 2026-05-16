@@ -6,14 +6,13 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
-from pathlib import Path
 from typing import Any
 
 import matplotlib
+
 matplotlib.use("Agg")  # non-interactive backend — no display required
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
-
 
 _PALETTE = [
     "#4C8BF5", "#34A853", "#FBBC04", "#EA4335",

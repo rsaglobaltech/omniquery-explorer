@@ -4,6 +4,7 @@ Shared pytest fixtures for the omniquery test-suite.
 from __future__ import annotations
 
 import math
+
 import pytest
 
 from omniquery.domain.entities.column import Column, ForeignKey
@@ -11,7 +12,6 @@ from omniquery.domain.entities.database_schema import DatabaseSchema, EngineType
 from omniquery.domain.entities.table import Table
 from omniquery.domain.entities.table_profile import TableProfile
 from omniquery.domain.ports.outbound.embedding_port import EmbeddingPort
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fake adapters

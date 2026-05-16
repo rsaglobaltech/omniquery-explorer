@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from omniquery.domain.entities.database_schema import EngineType
 from omniquery.domain.ports.outbound.database_port import DatabasePort
 from omniquery.infrastructure.db.mysql_adapter import MySQLAdapter
 from omniquery.infrastructure.db.oracle_adapter import OracleAdapter

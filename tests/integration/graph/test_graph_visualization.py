@@ -21,10 +21,11 @@ import math
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")          # headless — no display required
-import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import networkx as nx
 import pytest
 
@@ -33,7 +34,6 @@ from omniquery.domain.entities.database_schema import DatabaseSchema, EngineType
 from omniquery.domain.entities.table import Table
 from omniquery.domain.entities.table_profile import TableProfile
 from omniquery.infrastructure.graph.schema_graph_service import SchemaGraphService
-
 
 # ---------------------------------------------------------------------------
 # Output directory

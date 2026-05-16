@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 from omniquery.domain.entities.table import Table
 
@@ -31,14 +30,14 @@ class DatabaseSchema:
 
     engine: EngineType
     tables: list[Table] = field(default_factory=list)
-    db_name: Optional[str] = None
-    schema_name: Optional[str] = None
+    db_name: str | None = None
+    schema_name: str | None = None
 
     # ------------------------------------------------------------------
     # Convenience accessors
     # ------------------------------------------------------------------
 
-    def get_table(self, name: str) -> Optional[Table]:
+    def get_table(self, name: str) -> Table | None:
         """Look up a table by name (case-insensitive)."""
         name_lower = name.lower()
         return next((t for t in self.tables if t.name.lower() == name_lower), None)

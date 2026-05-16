@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from typing import Any
+
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 from rich.theme import Theme
-from typing import Any
 
 _THEME = Theme(
     {

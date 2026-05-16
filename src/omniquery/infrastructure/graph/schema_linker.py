@@ -9,9 +9,9 @@ generator sees only the most relevant subset of the schema.
 """
 from __future__ import annotations
 
-import math
 import logging
-from typing import Sequence
+import math
+from collections.abc import Sequence
 
 from omniquery.domain.entities.database_schema import DatabaseSchema
 from omniquery.domain.ports.outbound.embedding_port import EmbeddingPort

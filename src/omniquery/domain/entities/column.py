@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -30,8 +29,8 @@ class Column:
     sql_type: str
     nullable: bool = True
     is_primary_key: bool = False
-    foreign_key: Optional[ForeignKey] = None
-    comment: Optional[str] = None
+    foreign_key: ForeignKey | None = None
+    comment: str | None = None
 
     def __str__(self) -> str:
         flags = []

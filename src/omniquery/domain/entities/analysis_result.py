@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -18,10 +18,10 @@ class AnalysisResult:
     """
 
     question: str
-    generated_sql: Optional[str] = None
+    generated_sql: str | None = None
     raw_data: list[dict[str, Any]] = field(default_factory=list)
-    report: Optional[str] = None
-    error: Optional[str] = None
+    report: str | None = None
+    error: str | None = None
 
     # ------------------------------------------------------------------
     # Derived helpers

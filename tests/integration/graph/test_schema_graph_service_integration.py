@@ -14,7 +14,6 @@ from omniquery.domain.entities.table import Table
 from omniquery.domain.entities.table_profile import TableProfile
 from omniquery.infrastructure.graph.schema_graph_service import SchemaGraphService
 
-
 # ---------------------------------------------------------------------------
 # Shared schema: airline reservation system
 # ---------------------------------------------------------------------------

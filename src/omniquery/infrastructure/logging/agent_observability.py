@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 _CONTEXT: ContextVar[dict[str, Any]] = ContextVar("omniquery_log_context", default={})
 _RESERVED_RECORD_ATTRS = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys())
@@ -103,7 +104,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -168,7 +169,7 @@ def configure_logging(force: bool = False) -> None:
     ]
     log_dir = Path(os.getenv("OMNIQUERY_LOG_DIR", ".logs"))
     log_dir.mkdir(parents=True, exist_ok=True)
-    default_log_file = f"omniquery-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.logs"
+    default_log_file = f"omniquery-{datetime.now(UTC).strftime('%Y-%m-%d')}.logs"
     raw_log_file = os.getenv("OMNIQUERY_LOG_FILE")
     log_file = raw_log_file.strip() if raw_log_file and raw_log_file.strip() else default_log_file
 

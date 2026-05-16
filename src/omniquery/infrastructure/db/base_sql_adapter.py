@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Any
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from omniquery.domain.entities.column import Column, ForeignKey
 from omniquery.domain.entities.database_schema import DatabaseSchema, EngineType

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy.exc import ProgrammingError, OperationalError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from omniquery.domain.entities.analysis_result import AnalysisResult
 from omniquery.domain.entities.eda_query import EdaQuery

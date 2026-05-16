@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 from omniquery.domain.entities.column import Column
 
@@ -19,7 +18,7 @@ class Table:
 
     name: str
     columns: list[Column] = field(default_factory=list)
-    comment: Optional[str] = None
+    comment: str | None = None
 
     # ------------------------------------------------------------------
     # Convenience accessors
@@ -35,7 +34,7 @@ class Table:
         """Return all columns that carry a FK constraint."""
         return [c for c in self.columns if c.foreign_key is not None]
 
-    def get_column(self, name: str) -> Optional[Column]:
+    def get_column(self, name: str) -> Column | None:
         """Look up a column by name (case-insensitive)."""
         name_lower = name.lower()
         return next((c for c in self.columns if c.name.lower() == name_lower), None)

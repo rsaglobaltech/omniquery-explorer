@@ -21,15 +21,15 @@ Running
 from __future__ import annotations
 
 import os
-import pytest
+
 import httpx
+import pytest
 
 from omniquery.domain.entities.column import Column, ForeignKey
 from omniquery.domain.entities.database_schema import DatabaseSchema, EngineType
 from omniquery.domain.entities.table import Table
 from omniquery.infrastructure.graph.schema_linker import SchemaLinker
 from omniquery.infrastructure.llm.ollama_embedding_adapter import OllamaEmbeddingAdapter
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures

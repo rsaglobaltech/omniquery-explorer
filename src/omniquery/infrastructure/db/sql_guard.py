@@ -13,7 +13,7 @@ Replaces the regex-based read-only check with a sqlglot parser. Provides:
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 import sqlglot
 from sqlglot import exp

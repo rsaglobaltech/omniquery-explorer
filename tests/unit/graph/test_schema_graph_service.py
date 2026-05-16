@@ -7,8 +7,8 @@ Unit tests for SchemaGraphService:
 """
 from __future__ import annotations
 
-import pytest
 import networkx as nx
+import pytest
 
 from omniquery.domain.entities.column import Column, ForeignKey
 from omniquery.domain.entities.database_schema import DatabaseSchema, EngineType
@@ -18,7 +18,6 @@ from omniquery.infrastructure.graph.schema_graph_service import (
     SchemaGraphService,
     _semantic_score,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
