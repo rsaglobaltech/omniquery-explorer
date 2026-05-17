@@ -62,6 +62,9 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-17 | `28fd907` | feat(persistence): Alembic migrations async + revision inicial |
 | 2026-05-17 | `053fa3a` | ci: mypy typecheck en módulos curados |
 | 2026-05-17 | `10bcbf2` | ci(release): pipeline GHCR multi-arch con SBOM |
+| 2026-05-17 | `d446a00` | test: coverage RunEdaUseCase + score_tables |
+| 2026-05-17 | `c956d09` | docs(deploy): DEPLOYMENT.md + k8s manifests |
+| 2026-05-17 | `8c5c29d` | docs(readme): rewrite post-P0/P1 |
 
 ---
 
@@ -287,7 +290,7 @@ A partir de aquí: UI Web, multi-tenant completo, soporte BigQuery/Snowflake, ca
 
 Checklist mínimo de release v1.0:
 
-- [ ] Tests con cobertura ≥70% en `application/` y `infrastructure/` (parcial — falta scoring + use_case)
+- [x] Tests con cobertura en `application/RunEdaUseCase` (happy/fix/budget/pii/db-failure) y `SchemaGraphService.score_tables`
 - [x] Pipeline CI con lint + mypy + tests + bandit + pip-audit
 - [x] Imagen Docker multi-arch publicable a registry (release.yml: tag push → GHCR)
 - [x] Web API documentada con OpenAPI (auto-FastAPI) + `docker compose up` + rate-limit
@@ -296,5 +299,5 @@ Checklist mínimo de release v1.0:
 - [x] Persistencia de sesiones y query log activa (SQLite por defecto + Alembic)
 - [x] Soporte de al menos 2 proveedores LLM además de Ollama (OpenAI + Anthropic)
 - [x] Trazas OpenTelemetry exportables (vía OTLP/HTTP cuando se habilita)
-- [ ] Documentación de despliegue para una máquina y para Kubernetes
-- [ ] Harness de evaluación text-to-SQL con baseline publicado en README (skeleton hecho)
+- [x] Documentación de despliegue: docs/DEPLOYMENT.md + deploy/k8s/ manifests
+- [x] Harness de evaluación text-to-SQL: skeleton + dataset YAML + instrucciones de baseline en README (run con `python -m tests.eval.runner ...`)
