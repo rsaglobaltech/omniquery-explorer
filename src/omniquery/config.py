@@ -67,6 +67,19 @@ class PersistenceSettings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///.tmp/omniquery.db"
 
 
+class WebSettings(BaseSettings):
+    """HTTP adapter configuration (P0.3 rate-limit, CORS, etc.)."""
+
+    model_config = SettingsConfigDict(env_prefix="WEB_", extra="ignore")
+
+    # Requests per minute per identity (API key, or client IP when
+    # unauthenticated routes are enabled). 0 disables the limiter.
+    rate_limit_per_minute: int = 60
+    # Comma-separated CORS origins; empty string keeps the FastAPI default
+    # (no extra origins beyond '*' which the app currently applies).
+    cors_origins: str = "*"
+
+
 class CostGuardSettings(BaseSettings):
     """Cost-guard thresholds (P1.10).
 
@@ -142,6 +155,7 @@ class Settings(BaseSettings):
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
     cost: CostGuardSettings = Field(default_factory=CostGuardSettings)
     pii: PiiSettings = Field(default_factory=PiiSettings)
+    web: WebSettings = Field(default_factory=WebSettings)
 
 
 @lru_cache(maxsize=1)

@@ -21,10 +21,11 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
+from omniquery.adapters.web.rate_limit import TokenBucketRateLimiter, identity_for
 from omniquery.adapters.web.schemas import (
     AskRequest,
     AskResponse,
@@ -64,6 +65,31 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+# Single shared limiter instance — created at module load so every
+# request handler sees the same in-memory bucket store. The Container
+# is intentionally not used here to keep the middleware decoupled.
+_LIMITER = TokenBucketRateLimiter(get_settings().web)
+
+
+@app.middleware("http")
+async def _rate_limit_middleware(request: Request, call_next):
+    """Apply the token-bucket gate to every HTTP request.
+
+    /health is whitelisted so liveness probes never trip the limiter
+    (they typically run with no API key from kube/orchestrator IPs).
+    """
+    if request.url.path != "/health" and _LIMITER.enabled:
+        try:
+            await _LIMITER.check(identity_for(request))
+        except HTTPException as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers=exc.headers or {},
+            )
+    return await call_next(request)
 
 
 @app.get("/health", response_model=HealthResponse)
