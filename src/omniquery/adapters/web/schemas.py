@@ -11,6 +11,10 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     connection_url: SecretStr
     max_rows: int = Field(default=500, ge=1, le=10_000)
+    # Optional conversation thread. Reusing the same id across calls
+    # makes the agent see previous turns when MEMORY_ENABLED=true. Left
+    # as None for stateless one-shot questions (the previous default).
+    thread_id: str | None = Field(default=None, max_length=128)
 
 
 class ExploreRequest(BaseModel):

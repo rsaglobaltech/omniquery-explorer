@@ -67,16 +67,32 @@ class EdaSessionGraph:
         llm: LlmPort,
         profiler: ProfilingPort,
         schema_linker: SchemaLinker | None = None,
+        checkpointer: Any | None = None,
     ) -> None:
         self._db = db
         self._llm = llm
         self._profiler = profiler
         self._graph_svc = SchemaGraphService()
         self._schema_linker = schema_linker
+        # Optional LangGraph checkpointer. When set, callers can supply
+        # a thread_id to resume a previous session — the saver
+        # persists state between invocations.
+        self._checkpointer = checkpointer
         self._app = self._build()
 
-    async def run(self, connection_url: str, question: str, max_rows: int = 500) -> AnalysisResult:
-        session_id = uuid.uuid4().hex[:12]
+    async def run(
+        self,
+        connection_url: str,
+        question: str,
+        max_rows: int = 500,
+        thread_id: str | None = None,
+    ) -> AnalysisResult:
+        # ``thread_id`` doubles as the LangGraph checkpoint key and the
+        # log correlation id. When no caller-supplied id is given we
+        # mint a fresh one — single-shot CLI invocations behave like
+        # before, but a Web client that passes the same id across calls
+        # gets conversational continuity.
+        session_id = thread_id or uuid.uuid4().hex[:12]
         initial: EdaSessionState = {
             "session_id": session_id,
             "connection_url": connection_url,
@@ -104,8 +120,13 @@ class EdaSessionGraph:
                 "input": self._state_snapshot(initial),
             },
         )
+        # When a checkpointer is wired, LangGraph requires a config
+        # with ``configurable.thread_id`` so it knows which thread to
+        # read/write. We pass it unconditionally — graphs without a
+        # checkpointer simply ignore it.
+        invoke_config = {"configurable": {"thread_id": session_id}}
         with log_context(session_id=session_id, agent="session"):
-            final: EdaSessionState = await self._app.ainvoke(initial)
+            final: EdaSessionState = await self._app.ainvoke(initial, invoke_config)
         logger.info(
             "EDA session finished",
             extra={
@@ -154,8 +175,9 @@ class EdaSessionGraph:
             },
         )
         explore_app = self._build(explore_only=True)
+        invoke_config = {"configurable": {"thread_id": session_id}}
         with log_context(session_id=session_id, agent="session"):
-            final: EdaSessionState = await explore_app.ainvoke(initial)
+            final: EdaSessionState = await explore_app.ainvoke(initial, invoke_config)
         logger.info(
             "EDA explore session finished",
             extra={
@@ -211,7 +233,11 @@ class EdaSessionGraph:
             )
             sg.add_edge("fix_sql", "execute_sql")
             sg.add_edge("generate_report", END)
-        return sg.compile()
+        # Compile with the optional checkpointer. When None, LangGraph
+        # produces a stateless graph behaviour-identical to the legacy
+        # path; with a saver, ``thread_id`` flips the graph into a
+        # resumable conversation.
+        return sg.compile(checkpointer=self._checkpointer)
 
     def _wrap_node(self, agent_name: str, node_fn: NodeCallable) -> NodeCallable:
         async def _wrapped(state: EdaSessionState) -> EdaSessionState:

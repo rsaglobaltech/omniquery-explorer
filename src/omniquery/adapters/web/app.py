@@ -108,6 +108,9 @@ async def ask(req: AskRequest) -> AskResponse:
     container = get_container()
     url = req.connection_url.get_secret_value()
     use_case = container.eda_use_case(url)
+    # NB: thread_id is forwarded to the graph via EdaSessionGraph; the
+    # non-graph use-case path is stateless by design. When MEMORY is
+    # disabled, thread_id is simply ignored.
     result = await use_case.run_eda(
         EdaQuery(question=req.question, connection_url=url, max_rows=req.max_rows)
     )
@@ -140,7 +143,10 @@ async def ask_stream(req: AskRequest) -> StreamingResponse:
         #     adapter and releases pooled DB connections.
         task: asyncio.Task = asyncio.create_task(
             graph.run(
-                connection_url=url, question=req.question, max_rows=req.max_rows
+                connection_url=url,
+                question=req.question,
+                max_rows=req.max_rows,
+                thread_id=req.thread_id,
             )
         )
 

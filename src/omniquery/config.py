@@ -67,6 +67,26 @@ class CacheSettings(BaseSettings):
         return v.resolve()
 
 
+class MemorySettings(BaseSettings):
+    """Conversational memory (LangGraph checkpoints) configuration.
+
+    When enabled, the LangGraph state machine receives a checkpointer
+    so a session can resume on the same ``thread_id`` and the agent
+    sees prior turns. Backends:
+
+    - ``memory``: in-process only, lost on restart (good for tests and
+      single-shot CLI).
+    - ``sqlite``: file-backed; requires the optional
+      ``langgraph-checkpoint-sqlite`` package.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="MEMORY_", extra="ignore")
+
+    enabled: bool = False
+    backend: Literal["memory", "sqlite"] = "memory"
+    sqlite_path: Path = Path(".tmp/memory.sqlite")
+
+
 class PersistenceSettings(BaseSettings):
     """Internal persistence (sessions, query log) configuration."""
 
@@ -161,6 +181,7 @@ class Settings(BaseSettings):
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     cache: CacheSettings = Field(default_factory=CacheSettings)
     persistence: PersistenceSettings = Field(default_factory=PersistenceSettings)
+    memory: MemorySettings = Field(default_factory=MemorySettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
     cost: CostGuardSettings = Field(default_factory=CostGuardSettings)
     pii: PiiSettings = Field(default_factory=PiiSettings)

@@ -17,6 +17,7 @@ from omniquery.infrastructure.governance.cost_guard import BudgetTracker
 from omniquery.infrastructure.governance.pii_policy import PiiPolicy
 from omniquery.infrastructure.graph.schema_linker import SchemaLinker
 from omniquery.infrastructure.llm.llm_factory import resolve_llm_adapter
+from omniquery.infrastructure.llm.memory_factory import resolve_checkpointer
 from omniquery.infrastructure.llm.ollama_embedding_adapter import OllamaEmbeddingAdapter
 from omniquery.infrastructure.observability.tracing import configure_tracing
 from omniquery.infrastructure.persistence.session_store import PersistenceStore
@@ -58,6 +59,11 @@ class Container:
         self._budget = BudgetTracker(self._settings.cost)
         # Stateless PII policy compiled once from regex settings.
         self._pii = PiiPolicy(self._settings.pii)
+        # LangGraph checkpointer (None when MEMORY_ENABLED=false). Held
+        # at the container level so every EdaSessionGraph instance
+        # shares the same saver — that's how separate /ask calls with
+        # the same thread_id see each other's state.
+        self._checkpointer = resolve_checkpointer(self._settings.memory)
 
     @property
     def settings(self) -> Settings:
@@ -88,6 +94,7 @@ class Container:
             llm=self._llm,
             profiler=self._profiler,
             schema_linker=self._schema_linker,
+            checkpointer=self._checkpointer,
         )
 
 
