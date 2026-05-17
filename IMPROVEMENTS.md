@@ -14,8 +14,8 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 |---|---|---|---|---|---|---|
 | 1 | Hardening SQL (sqlglot AST + role read-only + timeouts) | Alto | M | P0 | 🟡 | `34a9ba4` + `f219d38` (AST y timeouts hechos; rol DB pendiente) |
 | 2 | Multi-LLM provider (OpenAI / Anthropic / Bedrock / Ollama) | Alto | M | P0 | 🟡 | `9aec4e5` (OpenAI + Anthropic hechos; Bedrock/Vertex pendientes) |
-| 3 | FastAPI Web Adapter + SSE streaming | Alto | M | P0 | ✅ | `8705473` |
-| 4 | Persistencia (sesiones, historial, query log) | Alto | M | P0 | 🟡 | `b8a9ea9` (SQLite + ORM hechos; Alembic + Postgres prod pendientes) |
+| 3 | FastAPI Web Adapter + SSE streaming | Alto | M | P0 | ✅ | `8705473` + `238c30b` (SSE + API-key + rate limiter; cancelación SSE pendiente) |
+| 4 | Persistencia (sesiones, historial, query log) | Alto | M | P0 | ✅ | `b8a9ea9` + `28fd907` (SQLite + ORM + Alembic migrations) |
 | 5 | Cache de schema, profile y embeddings | Alto | S | P0 | 🟡 | `62095d6` (schema + embeddings; profile pendiente) |
 | 6 | Configuración tipada (Pydantic Settings) + gestión de secretos | Alto | S | P0 | ✅ | `0c08df2` |
 | 7 | Cobertura de tests >70% + harness de evaluación text-to-SQL | Alto | L | P1 | 🟡 | `e96bcc7` + `08bc570` (unit tests + harness skeleton + dataset YAML; baseline numérico pendiente) |
@@ -29,7 +29,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | 15 | Cache semántico de preguntas similares | Medio | M | P2 | ⬜ | — |
 | 16 | Agente de visualización inteligente (Vega-Lite) | Medio | M | P2 | ⬜ | — |
 | 17 | Librería de consultas guardadas + colaboración | Medio | M | P2 | ⬜ | — |
-| 18 | CI/CD (GitHub Actions) + Docker image multi-stage | Alto | S | P2 | 🟡 | `49e757d` + `a8eec4c` (CI + Dockerfile + compose hechos; release pipeline GHCR pendiente) |
+| 18 | CI/CD (GitHub Actions) + Docker image multi-stage | Alto | S | P2 | ✅ | `49e757d` + `a8eec4c` + `057d3412` + `053fa3a` + `10bcbf2` (CI lint/mypy/tests/bandit/pip-audit + Dockerfile + compose + release pipeline GHCR multi-arch con SBOM) |
 | 19 | Soporte BigQuery, Snowflake, DuckDB, SQLite | Alto | M | P2 | 🟡 | `0a20472` (SQLite + DuckDB hechos; BigQuery + Snowflake + MSSQL pendientes) |
 | 20 | Soporte de joins multi-hop con razonamiento de path | Medio | L | P3 | ⬜ | — |
 
@@ -58,6 +58,10 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-17 | `0a20472` | feat(db): adapters SQLite + DuckDB |
 | 2026-05-17 | `57d3412` | ci: bandit + pip-audit |
 | 2026-05-17 | `08bc570` | feat(eval): harness text-to-SQL skeleton |
+| 2026-05-17 | `238c30b` | feat(web): rate limiter token-bucket por API key / IP |
+| 2026-05-17 | `28fd907` | feat(persistence): Alembic migrations async + revision inicial |
+| 2026-05-17 | `053fa3a` | ci: mypy typecheck en módulos curados |
+| 2026-05-17 | `10bcbf2` | ci(release): pipeline GHCR multi-arch con SBOM |
 
 ---
 
@@ -85,7 +89,7 @@ Archivos: `src/omniquery/infrastructure/db/base_sql_adapter.py`, nuevo módulo `
 - 🟡 Reuso de `httpx.AsyncClient` a nivel adapter (hoy se crea por llamada). (OpenAI y Anthropic reúsan; Ollama todavía crea por call.)
 - ✅ Eliminar el acceso a método "privado" `self._llm._chat(prompt)` desde `eda_session_graph.py` — `LlmPort.chat()` público añadido.
 
-### 2.3 FastAPI Web Adapter — ✅ hecho (commit `8705473`)
+### 2.3 FastAPI Web Adapter — ✅ hecho (commits `8705473`, `238c30b`)
 
 Dep ya instalada (`fastapi`, `uvicorn`). Añadir:
 - ✅ `src/omniquery/adapters/web/` con rutas:
@@ -93,10 +97,10 @@ Dep ya instalada (`fastapi`, `uvicorn`). Añadir:
   - ✅ `POST /explore`, `POST /schema`, `GET /health`.
 - ✅ Reutilizar `Container.eda_session_graph()` (singleton compartible).
 - ✅ CORS configurado y dependencia `X-API-Key` para writes.
-- ⬜ Rate-limit por IP/API key (pendiente).
+- ✅ Rate-limit token-bucket por API key / IP (`adapters/web/rate_limit.py`), `WEB_RATE_LIMIT_PER_MINUTE`.
 - ⬜ Manejo de cancelación con `asyncio.CancelledError` para liberar conexiones DB cuando el cliente cierra el SSE.
 
-### 2.4 Persistencia — 🟡 parcial (commit `b8a9ea9`)
+### 2.4 Persistencia — ✅ hecho (commits `b8a9ea9`, `28fd907`)
 
 Hoy no hay nada persistido. Para uso real necesitamos:
 - ✅ Tabla `sessions(id, connection_fingerprint, db_engine, created_at)`.
@@ -104,7 +108,7 @@ Hoy no hay nada persistido. Para uso real necesitamos:
 - ✅ Tabla `reports(query_id, markdown, created_at)`.
 - ⬜ `cached_profiles(connection_fingerprint, table_name, profile_json, ttl)` — sigue en disco vía `DiskCache`.
 - ✅ `cached_schemas` (vía `DiskCache`, no en BD relacional).
-- 🟡 Implementación con SQLAlchemy async sobre SQLite por defecto (configurable a Postgres con `PERSIST_DATABASE_URL`). ⬜ Migraciones Alembic.
+- ✅ Implementación con SQLAlchemy async sobre SQLite por defecto (configurable a Postgres con `PERSIST_DATABASE_URL`). ✅ Migraciones Alembic con `alembic.ini` + env.py async-aware + revision inicial; `PersistenceStore.init_schema` ejecuta `alembic upgrade head`.
 
 ### 2.5 Cache — 🟡 parcial (commit `62095d6`)
 
@@ -202,10 +206,10 @@ Hoy `chart_query_results` decide chart por heurística. Sustituir por un agente 
 - Compartir entre usuarios del workspace.
 - Re-ejecutar como reporte programado (cron).
 
-### 4.5 CI/CD + Docker — 🟡 parcial (commits `49e757d`, `a8eec4c`, `57d3412`)
+### 4.5 CI/CD + Docker — ✅ hecho (commits `49e757d`, `a8eec4c`, `57d3412`, `053fa3a`, `10bcbf2`)
 
-- 🟡 `.github/workflows/ci.yml`: ✅ lint (ruff), ⬜ typecheck (mypy/pyright), ✅ tests, ✅ security scan (bandit medium+ gate, pip-audit).
-- ⬜ `.github/workflows/release.yml`: build wheel + Docker image (multi-arch buildx), publish a GHCR.
+- ✅ `.github/workflows/ci.yml`: ruff + mypy (curated modules) + tests + bandit medium+ gate + pip-audit.
+- ✅ `.github/workflows/release.yml`: docker buildx multi-arch (linux/amd64+arm64) con cache GHA, tagging semver, provenance + SBOM, publica a `ghcr.io/<repo>`.
 - ✅ `Dockerfile` multi-stage: builder con `uv`, runtime slim, non-root user (uid 1000), HEALTHCHECK contra `/health`.
 - ✅ `docker-compose.yml` que orqueste app + Ollama con volúmenes para modelos y persistencia SQLite.
 
@@ -284,12 +288,12 @@ A partir de aquí: UI Web, multi-tenant completo, soporte BigQuery/Snowflake, ca
 Checklist mínimo de release v1.0:
 
 - [ ] Tests con cobertura ≥70% en `application/` y `infrastructure/` (parcial — falta scoring + use_case)
-- [x] Pipeline CI con lint + tests + bandit + pip-audit (typecheck mypy pendiente)
-- [x] Dockerfile + docker-compose locales (publicación a registry pendiente)
-- [x] Web API documentada con OpenAPI (auto-FastAPI) + `docker compose up`
+- [x] Pipeline CI con lint + mypy + tests + bandit + pip-audit
+- [x] Imagen Docker multi-arch publicable a registry (release.yml: tag push → GHCR)
+- [x] Web API documentada con OpenAPI (auto-FastAPI) + `docker compose up` + rate-limit
 - [x] Autenticación por API key activa por defecto
 - [x] SQL guard basado en AST — falta documentar rol DB read-only
-- [ ] Persistencia de sesiones y query log activa
+- [x] Persistencia de sesiones y query log activa (SQLite por defecto + Alembic)
 - [x] Soporte de al menos 2 proveedores LLM además de Ollama (OpenAI + Anthropic)
 - [x] Trazas OpenTelemetry exportables (vía OTLP/HTTP cuando se habilita)
 - [ ] Documentación de despliegue para una máquina y para Kubernetes
