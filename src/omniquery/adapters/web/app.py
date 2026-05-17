@@ -16,6 +16,7 @@ All write paths require ``X-API-Key`` when ``ENVIRONMENT=production``.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -132,11 +133,35 @@ async def ask_stream(req: AskRequest) -> StreamingResponse:
     graph = container.eda_session_graph(url)
 
     async def _producer() -> AsyncGenerator[str, None]:
-        yield _sse("started", {"question": req.question})
-        try:
-            result = await graph.run(
+        # Run the LangGraph pipeline as a background task so we can:
+        # (a) yield SSE keep-alives while it runs, and
+        # (b) react to client disconnects by cancelling the task,
+        #     which propagates CancelledError down through every
+        #     adapter and releases pooled DB connections.
+        task: asyncio.Task = asyncio.create_task(
+            graph.run(
                 connection_url=url, question=req.question, max_rows=req.max_rows
             )
+        )
+
+        yield _sse("started", {"question": req.question})
+        try:
+            result = await task
+        except asyncio.CancelledError:
+            # Triggered when StreamingResponse detects the client went
+            # away. The connection is already dead so emitting another
+            # event would just be discarded by starlette. Tear the
+            # graph task down fully — that propagates CancelledError
+            # through every adapter and releases the pooled DB
+            # connection — and re-raise so the framework finalises the
+            # response.
+            task.cancel()
+            try:
+                await task
+            except BaseException:  # noqa: BLE001
+                pass
+            logger.info("ask_stream cancelled by client")
+            raise
         except Exception as exc:  # noqa: BLE001
             logger.exception("ask_stream failed")
             yield _sse("error", {"message": str(exc)})
