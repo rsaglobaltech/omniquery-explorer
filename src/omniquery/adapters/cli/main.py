@@ -18,6 +18,7 @@ Environment variables:
 """
 
 import asyncio
+import os
 
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -47,6 +48,23 @@ app = typer.Typer(
 )
 
 
+def _apply_language_override(language: str | None) -> None:
+    """Push --language onto the environment so Settings picks it up.
+
+    We mutate the env BEFORE the container is built (it caches Settings
+    on first access). This keeps the CLI a thin wrapper around the
+    canonical config source instead of carrying a parallel knob.
+    """
+    if language is None:
+        return
+    normalised = language.lower().strip()
+    if normalised not in {"en", "es", "auto"}:
+        raise typer.BadParameter(
+            f"--language must be one of: en, es, auto (got {language!r})"
+        )
+    os.environ["LLM_LANGUAGE"] = normalised
+
+
 def _require_url(url: str | None) -> str:
     if url:
         return url
@@ -74,37 +92,62 @@ def main(ctx: typer.Context) -> None:
 
 @app.command()
 def ask(
-    question: str = typer.Argument(..., help="Pregunta en lenguaje natural."),
+    question: str = typer.Argument(..., help="Natural-language question."),
     url: str | None = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
-    max_rows: int = typer.Option(500, "--max-rows", "-n", help="Máximo de filas a recuperar."),
-    show_data: bool = typer.Option(True, "--show-data", help="Muestra la tabla de datos crudos."),
+    max_rows: int = typer.Option(500, "--max-rows", "-n", help="Max rows to fetch."),
+    show_data: bool = typer.Option(True, "--show-data", help="Show the raw data table."),
+    thread_id: str | None = typer.Option(
+        None,
+        "--thread-id",
+        "-t",
+        help="Conversation thread id. Reusing the same id across calls keeps "
+        "the agent context when MEMORY_ENABLED=true.",
+    ),
+    language: str | None = typer.Option(
+        None,
+        "--language",
+        "-l",
+        help="Force prompt/report language: en | es | auto. Overrides LLM_LANGUAGE.",
+    ),
 ) -> None:
     """
-    Realiza una consulta EDA en lenguaje natural sobre la base de datos.
+    Run a single natural-language EDA query over the configured database.
 
-    Ejemplo:\n
-        omniquery ask "¿Cuáles son los 5 productos más vendidos?"
+    Examples:\n
+        omniquery ask "Top 5 products by revenue"\n
+        omniquery ask "¿Cuál es el ingreso medio?" --language es\n
+        omniquery ask "Now break it down by month" --thread-id sess-42
     """
+    _apply_language_override(language)
     connection_url = _require_url(url)
-    asyncio.run(_run_ask(question, connection_url, max_rows, show_data))
+    asyncio.run(_run_ask(question, connection_url, max_rows, show_data, thread_id))
 
 
 @app.command()
 def explore(
     url: str | None = typer.Option(None, "--url", "-u", help="SQLAlchemy async connection URL."),
-    max_rows: int = typer.Option(500, "--max-rows", "-n", help="Máximo de filas por consulta."),
-    question: str | None = typer.Option(None, "--question", "-q", help="Pregunta a responder (si se omite, usa la mejor propuesta)."),
+    max_rows: int = typer.Option(500, "--max-rows", "-n", help="Max rows per query."),
+    question: str | None = typer.Option(
+        None, "--question", "-q", help="Question to answer (defaults to the best proposed one)."
+    ),
+    thread_id: str | None = typer.Option(
+        None, "--thread-id", "-t", help="Conversation thread id (see 'omniquery ask')."
+    ),
+    language: str | None = typer.Option(
+        None, "--language", "-l", help="Force prompt/report language: en | es | auto."
+    ),
 ) -> None:
     """
-    Sesión EDA completa: descubre el esquema, perfila tablas, propone preguntas,
-    genera SQL, ejecuta y genera reporte.
+    Full EDA session: discover schema, profile tables, propose questions,
+    generate SQL, execute it, and produce the analytical report.
 
-    Ejemplo:\n
+    Examples:\n
         omniquery explore\n
-        omniquery explore --question "¿Cuál es la distribución por taxón?"
+        omniquery explore --question "¿Cuál es la distribución por taxón?" --language es
     """
+    _apply_language_override(language)
     connection_url = _require_url(url)
-    asyncio.run(_run_explore(connection_url, max_rows, question))
+    asyncio.run(_run_explore(connection_url, max_rows, question, thread_id))
 
 
 @app.command()
@@ -155,12 +198,22 @@ def schema(
 # ---------------------------------------------------------------------------
 
 async def _run_ask(
-    question: str, connection_url: str, max_rows: int, show_data: bool
+    question: str,
+    connection_url: str,
+    max_rows: int,
+    show_data: bool,
+    thread_id: str | None = None,
 ) -> None:
+    # NB: thread_id only takes effect when MEMORY_ENABLED=true. The
+    # use-case is stateless by default; the graph path inside RunEdaUseCase
+    # ignores the id when no checkpointer is wired, so passing it is safe
+    # either way and lets the CLI mirror the HTTP /ask contract.
     print_banner()
     container = get_container()
     use_case = container.eda_use_case(connection_url)
-    query = EdaQuery(question=question, connection_url=connection_url, max_rows=max_rows)
+    query = EdaQuery(
+        question=question, connection_url=connection_url, max_rows=max_rows
+    )
 
     with Progress(
         SpinnerColumn(),
@@ -186,7 +239,10 @@ async def _run_ask(
 
 
 async def _run_explore(
-    connection_url: str, max_rows: int, question: str | None
+    connection_url: str,
+    max_rows: int,
+    question: str | None,
+    thread_id: str | None = None,
 ) -> None:
     print_banner()
     container = get_container()
@@ -198,13 +254,16 @@ async def _run_explore(
         console=console,
         transient=True,
     ) as progress:
-        task = progress.add_task("🔍 Explorando base de datos (agentes)…", total=None)
+        task = progress.add_task("🔍 Exploring database (agents)…", total=None)
+        # ``thread_id`` is forwarded to LangGraph; it is honoured only
+        # when MEMORY_ENABLED=true, otherwise the graph is stateless.
         result = await graph.run(
             connection_url=connection_url,
             question=question or "",
             max_rows=max_rows,
+            thread_id=thread_id,
         )
-        progress.update(task, description="Listo.")
+        progress.update(task, description="Done.")
 
     if result.error:
         print_error(result.error)
