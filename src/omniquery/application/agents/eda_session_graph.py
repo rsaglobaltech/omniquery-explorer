@@ -11,6 +11,7 @@ from langgraph.graph import END, StateGraph
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from typing_extensions import TypedDict
 
+from omniquery.config import get_settings
 from omniquery.domain.entities.analysis_result import AnalysisResult
 from omniquery.domain.entities.database_schema import DatabaseSchema
 from omniquery.domain.entities.eda_query import EdaQuery
@@ -22,6 +23,11 @@ from omniquery.domain.ports.outbound.llm_port import LlmPort
 from omniquery.domain.ports.outbound.profiling_port import ProfilingPort
 from omniquery.infrastructure.graph.schema_graph_service import SchemaGraphService
 from omniquery.infrastructure.graph.schema_linker import SchemaLinker
+from omniquery.infrastructure.llm.i18n import resolve_locale
+from omniquery.infrastructure.llm.llm_prompts import (
+    build_propose_questions_prompt,
+    build_summarize_db_prompt,
+)
 from omniquery.infrastructure.logging.agent_observability import get_payload_limit, log_context
 from omniquery.infrastructure.observability.tracing import span
 
@@ -334,23 +340,16 @@ class EdaSessionGraph:
         profile_summary = "\n".join(
             profiles[n].summary_line() for n in top_names if n in profiles
         )
-        prompt = (
-            "Eres un analista de datos experto en exploración de bases de datos.\n"
-            "Base de datos: " + (schema.db_name or "desconocida") + " (" + schema.engine.value + ")\n\n"
-            "TABLAS MÁS IMPORTANTES:\n" + verified_ddl + "\n\n"
-            "PERFILADO:\n" + profile_summary + "\n\n"
-            "TAREA: Escribe EXACTAMENTE 6 líneas, una por pregunta EDA. NINGÚN otro texto.\n"
-            "FORMATO (copia exactamente, reemplaza los valores):\n"
-            "[difficulty:easy] [category:count] ¿Cuántos registros hay en X? | tables: X\n"
-            "[difficulty:medium] [category:distribution] ¿Cuál es la distribución de Y en X? | tables: X\n\n"
-            "Reglas:\n"
-            "- difficulty debe ser: easy, medium o hard\n"
-            "- category debe ser: count, distribution, trend, quality, join u other\n"
-            "- Cada línea termina con '| tables: tabla1,tabla2'\n"
-            "- Las preguntas deben estar en español natural, sin SQL ni markdown\n"
-            "- NO incluyas numeración, explicaciones ni texto adicional\n"
-            "- Escribe SOLO las 6 líneas\n\n"
-            "INICIO DE RESPUESTA:"
+        # The explore flow has no user question yet, so we honour the
+        # explicit LLM_LANGUAGE setting (defaulting to English).
+        setting = get_settings().llm.language
+        locale = resolve_locale(setting, state.get("question", "") or "")
+        prompt = build_propose_questions_prompt(
+            locale=locale,
+            db_name=schema.db_name or "",
+            engine=schema.engine.value,
+            verified_ddl=verified_ddl,
+            profile_summary=profile_summary,
         )
         logger.info("[propose_questions] Asking LLM to propose questions...")
         raw = await self._llm.chat(prompt, call_name="propose_questions")
@@ -369,20 +368,23 @@ class EdaSessionGraph:
         )
         total_tables = len(schema.tables)
         total_rows = sum(s.row_count for s in scored)
-        prompt = (
-            "Eres un analista de datos. Escribe un resumen ejecutivo en español (máximo 5 oraciones) "
-            "describiendo el propósito y contenido de esta base de datos.\n\n"
-            f"Base de datos: {schema.db_name or 'desconocida'} ({schema.engine.value})\n"
-            f"Total de tablas: {total_tables}\n"
-            f"Filas estimadas en las tablas principales: {total_rows:,}\n\n"
-            "TABLAS MÁS RELEVANTES (nombre · filas · razones):\n"
-            + "\n".join(
-                f"- {s.table_name}: {s.row_count:,} filas · {', '.join(s.reasons[:2])}"
-                for s in scored[:8]
-            )
-            + "\n\nPERFILADO:\n"
-            + profile_summary
-            + "\n\nResponde SOLO con el párrafo de resumen, sin títulos ni listas."
+        setting = get_settings().llm.language
+        locale = resolve_locale(setting, state.get("question", "") or "")
+        # Render the bullet list of relevant tables in the chosen locale
+        # so the prompt reads naturally on both sides of the call.
+        rows_word = "filas" if locale == "es" else "rows"
+        table_summary = "\n".join(
+            f"- {s.table_name}: {s.row_count:,} {rows_word} · {', '.join(s.reasons[:2])}"
+            for s in scored[:8]
+        )
+        prompt = build_summarize_db_prompt(
+            locale=locale,
+            db_name=schema.db_name or "",
+            engine=schema.engine.value,
+            total_tables=total_tables,
+            total_rows=total_rows,
+            table_summary=table_summary,
+            profile_summary=profile_summary,
         )
         logger.info("[summarize] Generating DB summary...")
         summary = await self._llm.chat(prompt, call_name="summarize_db")

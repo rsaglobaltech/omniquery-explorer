@@ -9,6 +9,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LlmProvider = Literal["ollama", "openai", "anthropic"]
 Environment = Literal["development", "staging", "production"]
+# Languages supported by the localised prompt registry. ``auto`` means
+# the resolver inspects the question text on every call and picks the
+# best match.
+Language = Literal["en", "es", "auto"]
 
 
 class LlmSettings(BaseSettings):
@@ -21,6 +25,11 @@ class LlmSettings(BaseSettings):
     embedding_model: str = "nomic-embed-text"
     timeout: float = 300.0
     max_retries: int = 3
+    # Output language for proposed questions, DB summaries, and EDA
+    # reports. ``auto`` detects per call from the user's question.
+    # Generated SQL itself is always plain SQL — only the natural-
+    # language wrappers around it follow this setting.
+    language: Language = "auto"
 
     # Provider-specific
     ollama_base_url: str = "http://localhost:11434"

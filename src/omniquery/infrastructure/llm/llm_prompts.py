@@ -1,19 +1,30 @@
 """Prompt builders shared by all chat-style LLM adapters.
 
-Keeps generate_sql / fix_sql / generate_report prompts in one place so
-the OpenAI, Anthropic, and Ollama adapters stay thin transports.
+Templates live in ``omniquery.infrastructure.llm.i18n`` keyed by locale
+(en/es). Each builder picks the locale through ``resolve_locale`` so
+adapters stay completely unaware of language plumbing.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import textwrap
 from pathlib import Path
 from typing import Any
 
+from omniquery.config import get_settings
 from omniquery.domain.entities.database_schema import DatabaseSchema
 from omniquery.domain.entities.eda_query import EdaQuery
+from omniquery.infrastructure.llm.i18n import (
+    FIX_SQL,
+    GENERATE_SQL,
+    PROPOSE_QUESTIONS,
+    REPORT,
+    SUMMARIZE_DB,
+    TABLE_SELECTION,
+    Locale,
+    resolve_locale,
+)
 
 _SYSTEM_PROMPT_PATH = Path(__file__).parents[4] / "docs" / "system_prompt.md"
 
@@ -48,38 +59,36 @@ def assert_select_only(sql: str) -> None:
         raise ValueError(f"LLM returned a non-SELECT statement: {sql[:120]!r}")
 
 
+def _locale_for(query: EdaQuery) -> Locale:
+    """Resolve the locale for this call.
+
+    Priority:
+    1. ``query.language`` if the entity carries one (planned future field).
+    2. ``LLM_LANGUAGE`` setting + question text via the i18n resolver.
+    """
+    setting = get_settings().llm.language
+    return resolve_locale(setting, query.question or "")
+
+
 def build_table_selection_prompt(schema: DatabaseSchema, query: EdaQuery) -> str:
     all_table_names = "\n".join(f"- {n}" for n in schema.table_names)
-    return textwrap.dedent(f"""
-        You have a {schema.engine.value} database called '{schema.db_name}'.
-        Here is the full list of tables:
-
-        {all_table_names}
-
-        Question: {query.question}
-
-        Which 3 to 6 tables are most relevant to answer this question?
-        Reply with ONLY a plain comma-separated list of table names — nothing else.
-        Example: rna, taxonomy, xref
-    """).strip()
+    return TABLE_SELECTION[_locale_for(query)].format(
+        engine=schema.engine.value,
+        db_name=schema.db_name,
+        tables=all_table_names,
+        question=query.question,
+    )
 
 
 def build_generate_sql_prompt(
     schema: DatabaseSchema, query: EdaQuery, verified_ddl: str
 ) -> str:
-    return textwrap.dedent(f"""
-        VERIFIED SCHEMA — use ONLY these tables and their exact columns:
-        {verified_ddl}
-
-        Question: {query.question}
-
-        Rules:
-        - Use ONLY column names that appear in the VERIFIED SCHEMA above.
-        - Do NOT invent column names or table names.
-        - Only join on columns that exist in BOTH tables.
-        - Reply with ONLY the SQL SELECT statement — no explanation, no markdown fences.
-        - Maximum {query.max_rows} rows (add LIMIT as appropriate for {schema.engine.value}).
-    """).strip()
+    return GENERATE_SQL[_locale_for(query)].format(
+        verified_ddl=verified_ddl,
+        question=query.question,
+        max_rows=query.max_rows,
+        engine=schema.engine.value,
+    )
 
 
 def build_fix_sql_prompt(
@@ -89,29 +98,14 @@ def build_fix_sql_prompt(
     error: str,
     verified_ddl: str,
 ) -> str:
-    return textwrap.dedent(f"""
-        The following SQL statement was generated for the question:
-        "{query.question}"
-
-        It raised a database error. You MUST fix it using ONLY the exact
-        column names listed in the VERIFIED SCHEMA below.
-        DO NOT use any column name that is not explicitly listed there.
-        DO NOT invent JOIN conditions — only join on columns that exist in BOTH tables.
-
-        VERIFIED SCHEMA (authoritative — do not deviate):
-        {verified_ddl}
-
-        FAILED SQL:
-        {bad_sql}
-
-        DATABASE ERROR:
-        {error}
-
-        Reply with ONLY the corrected SQL SELECT statement — no explanation,
-        no markdown fences.
-        Maximum {query.max_rows} rows (add LIMIT as appropriate for
-        {schema.engine.value}).
-    """).strip()
+    return FIX_SQL[_locale_for(query)].format(
+        question=query.question,
+        verified_ddl=verified_ddl,
+        bad_sql=bad_sql,
+        error=error,
+        max_rows=query.max_rows,
+        engine=schema.engine.value,
+    )
 
 
 def build_report_prompt(
@@ -121,18 +115,46 @@ def build_report_prompt(
 ) -> str:
     schema_ddl = schema.to_ddl_summary()
     results_json = json.dumps(results, default=str, ensure_ascii=False, indent=2)
-    return textwrap.dedent(f"""
-        <schema_definition>
-        {schema_ddl}
-        </schema_definition>
+    return REPORT[_locale_for(query)].format(
+        schema_ddl=schema_ddl,
+        question=query.question,
+        results_json=results_json,
+    )
 
-        Original question: {query.question}
 
-        <query_results>
-        {results_json}
-        </query_results>
+def build_propose_questions_prompt(
+    *,
+    locale: Locale,
+    db_name: str,
+    engine: str,
+    verified_ddl: str,
+    profile_summary: str,
+) -> str:
+    """Builder used by the explore flow (the agent passes the locale in)."""
+    return PROPOSE_QUESTIONS[locale].format(
+        db_name=db_name or ("desconocida" if locale == "es" else "unknown"),
+        engine=engine,
+        verified_ddl=verified_ddl,
+        profile_summary=profile_summary,
+    )
 
-        Generate the full EDA report following the output format defined in your
-        system prompt (sections: 🧠 Análisis del Negocio, 🔍 Estrategia SQL,
-        📊 Análisis Exploratorio, 📝 Conclusiones).
-    """).strip()
+
+def build_summarize_db_prompt(
+    *,
+    locale: Locale,
+    db_name: str,
+    engine: str,
+    total_tables: int,
+    total_rows: int,
+    table_summary: str,
+    profile_summary: str,
+) -> str:
+    """Builder used by the explore flow's DB-summary node."""
+    return SUMMARIZE_DB[locale].format(
+        db_name=db_name or ("desconocida" if locale == "es" else "unknown"),
+        engine=engine,
+        total_tables=total_tables,
+        total_rows=total_rows,
+        table_summary=table_summary,
+        profile_summary=profile_summary,
+    )
