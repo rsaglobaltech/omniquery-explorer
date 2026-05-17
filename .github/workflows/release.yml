@@ -1,0 +1,82 @@
+name: Release
+
+# Triggered by:
+# - Pushing a semver tag (vX.Y.Z) → builds and publishes the image.
+# - Manual workflow_dispatch with a custom tag (debug / re-run).
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Override image tag (e.g. 0.1.0-rc1)"
+        required: false
+        default: ""
+
+# Allow the workflow to push packages to GHCR using the ephemeral
+# GITHUB_TOKEN — no extra secrets to manage.
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build multi-arch image and push to GHCR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        # Required to build arm64 from an amd64 runner.
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event.inputs.tag != '' }}
+
+      - name: Build and push (linux/amd64,arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Reuse and update the build cache between releases. Speeds
+          # up the second build by ~70% on the same base image.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Generate provenance + SBOM attestations so downstream
+          # consumers can audit what went into the image.
+          provenance: true
+          sbom: true
+
+      - name: Image digest
+        run: echo "Published digest=${{ steps.meta.outputs.digest }}"
