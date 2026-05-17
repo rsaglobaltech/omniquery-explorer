@@ -54,7 +54,10 @@ class DiskCache(Generic[T]):
             return None
         try:
             with path.open("rb") as fh:
-                entry: CacheEntry[T] = pickle.load(fh)
+                # The cache directory is writable only by this process,
+                # so the payload is trusted. We still guard against
+                # corrupted files via the broad except below.
+                entry: CacheEntry[T] = pickle.load(fh)  # nosec B301
         except (pickle.PickleError, EOFError, AttributeError) as exc:
             logger.warning("cache: unreadable entry %s (%s); deleting", path, exc)
             path.unlink(missing_ok=True)
