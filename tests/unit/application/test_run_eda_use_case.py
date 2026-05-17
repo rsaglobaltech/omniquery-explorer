@@ -237,6 +237,40 @@ async def test_semantic_cache_stores_on_miss(
 
 
 @pytest.mark.asyncio
+async def test_sql_guard_error_triggers_fix_sql(
+    simple_schema: DatabaseSchema, query: EdaQuery
+) -> None:
+    """Malformed SQL rejected by sql_guard must route through fix_sql.
+
+    The first execute attempt raises ``SqlGuardError`` (the
+    AST-based parser cannot make sense of the LLM output). The
+    use-case must call ``fix_sql`` and execute the corrected SQL
+    instead of failing the whole run.
+    """
+    from omniquery.infrastructure.db.sql_guard import SqlGuardError
+
+    class _GuardThenOkDB(FakeDB):
+        async def execute_query(self, connection_url, sql, max_rows=500):
+            self.execute_calls.append(sql)
+            # First attempt: guard refuses; subsequent attempts succeed.
+            if len(self.execute_calls) == 1:
+                raise SqlGuardError("SQL parse failed: unexpected token")
+            return [{"name": "Ana"}]
+
+    db = _GuardThenOkDB(simple_schema)
+    llm = FakeLLM()
+    use_case = RunEdaUseCase(db=db, llm=llm)
+
+    result = await use_case.run_eda(query)
+
+    assert not result.error
+    # fix_sql ran exactly once and the second execute used the fix.
+    assert llm.fix_called == 1
+    assert db.execute_calls[0] == "SELECT * FROM customers"
+    assert db.execute_calls[1] == "SELECT id FROM customers"
+
+
+@pytest.mark.asyncio
 async def test_db_failure_surfaces_after_retry_exhaustion(
     simple_schema: DatabaseSchema, query: EdaQuery
 ) -> None:

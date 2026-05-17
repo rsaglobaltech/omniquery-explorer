@@ -74,11 +74,12 @@ class BaseSQLAdapter(DatabasePort):
         self, connection_url: str, sql: str, max_rows: int = 500
     ) -> list[dict[str, Any]]:
         engine_type = self.engine_type
-        try:
-            assert_read_only(sql, engine_type)
-            safe_sql = apply_limit(sql, max_rows, engine_type)
-        except SqlGuardError as exc:
-            raise ValueError(str(exc)) from exc
+        # SqlGuardError already subclasses ValueError, so re-raise it
+        # unchanged. Surfacing the precise exception lets the use-case
+        # tell parse/safety failures apart from generic ValueErrors and
+        # route them through the LLM repair loop.
+        assert_read_only(sql, engine_type)
+        safe_sql = apply_limit(sql, max_rows, engine_type)
 
         settings = get_settings()
         timeout_ms = settings.db.statement_timeout_ms

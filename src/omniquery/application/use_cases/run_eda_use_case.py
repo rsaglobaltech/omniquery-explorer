@@ -11,6 +11,7 @@ from omniquery.domain.ports.inbound.eda_use_case import EdaUseCase
 from omniquery.domain.ports.outbound.database_port import DatabasePort
 from omniquery.domain.ports.outbound.llm_port import LlmPort
 from omniquery.infrastructure.cache.semantic_cache import SemanticQueryCache
+from omniquery.infrastructure.db.sql_guard import SqlGuardError
 from omniquery.infrastructure.governance.cost_guard import BudgetExceeded, BudgetTracker
 from omniquery.infrastructure.governance.pii_policy import PiiPolicy
 from omniquery.infrastructure.persistence.session_store import PersistenceStore
@@ -130,6 +131,24 @@ class RunEdaUseCase(EdaUseCase):
                     last_error = ""
                     break
 
+                except SqlGuardError as guard_err:
+                    # LLM emitted malformed or unsafe SQL: sql_guard
+                    # refused it before it ever touched the database.
+                    # Feed the parser's error back through fix_sql so the
+                    # model can self-correct rather than fail the run.
+                    last_error = str(guard_err)
+                    logger.warning(
+                        "SQL attempt %d rejected by guard: %s",
+                        attempt + 1,
+                        last_error,
+                    )
+                    if attempt < _MAX_SQL_RETRIES:
+                        sql = await self._llm.fix_sql(
+                            llm_schema, query, sql, last_error
+                        )
+                        result.generated_sql = sql
+                        continue
+                    raise
                 except (ProgrammingError, OperationalError) as db_err:
                     last_error = str(db_err.orig) if db_err.orig else str(db_err)
                     logger.warning(
