@@ -26,7 +26,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | 12 | Dialect-aware SQL emission (LIMIT vs FETCH FIRST, quoting) | Medio | S | P1 | 🟡 | `34a9ba4` (LIMIT/FETCH hecho; quoting/prompts pendientes) |
 | 13 | Connection pool reutilizable + cancelación de queries | Medio | S | P1 | 🟡 | `f219d38` (pool LRU hecho; cancelación SSE pendiente) |
 | 14 | UI Web (Next.js o Streamlit) | Alto | L | P2 | ⬜ | — |
-| 15 | Cache semántico de preguntas similares | Medio | M | P2 | ⬜ | — |
+| 15 | Cache semántico de preguntas similares | Medio | M | P2 | ✅ | `24ac911` (cosine + per-DB partition + eviction + use_case hook) |
 | 16 | Agente de visualización inteligente (Vega-Lite) | Medio | M | P2 | ⬜ | — |
 | 17 | Librería de consultas guardadas + colaboración | Medio | M | P2 | ⬜ | — |
 | 18 | CI/CD (GitHub Actions) + Docker image multi-stage | Alto | S | P2 | ✅ | `49e757d` + `a8eec4c` + `057d3412` + `053fa3a` + `10bcbf2` (CI lint/mypy/tests/bandit/pip-audit + Dockerfile + compose + release pipeline GHCR multi-arch con SBOM) |
@@ -70,6 +70,7 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-17 | `a88809e` | feat(web): SSE cancellation libera conexión DB |
 | 2026-05-17 | `70a27a2` | feat(db): MSSQL adapter (aioodbc optional) + FETCH + brackets |
 | 2026-05-17 | `a1c1985` | feat(memory): LangGraph checkpoints + thread_id |
+| 2026-05-17 | `24ac911` | feat(cache): semantic question cache (cosine + per-DB) |
 
 ---
 
@@ -200,7 +201,9 @@ Hoy hay logging JSON estructurado (bien). Faltan:
 - **Opción B (producto)**: Next.js + shadcn/ui — chat, vista de schema (D3 force graph), tabla resultados, editor SQL con diff cuando el `fix_sql` modifica la query, descarga CSV/Parquet.
 - Replicar UX de Hex/Mode/Metabase Ask AI: panel izquierdo schema explorer, derecha conversación.
 
-### 4.2 Cache semántico
+### 4.2 Cache semántico — ✅ hecho (commit `24ac911`)
+
+✅ `SemanticQueryCache` con cosine pure-Python, partición por connection fingerprint, eviction LRU por `max_entries`. ✅ Hook en `RunEdaUseCase` — hit ≥ `SEMANTIC_CACHE_THRESHOLD` (default 0.92) salta `generate_sql`. ⬜ Migrar a pgvector / sqlite-vec cuando supere ~5k entradas (búsqueda actual O(n)).
 
 Embeber cada pregunta y guardar `(question_embed, sql, success)`. En la siguiente pregunta, hacer cosine search >= 0.92 → reutilizar SQL con confirmación. Implementar con pgvector o `chromadb`.
 
