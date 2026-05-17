@@ -51,8 +51,52 @@ class PersistenceStore:
         self._schema_ready = False
 
     async def init_schema(self) -> None:
+        """Ensure the persistence schema exists.
+
+        Strategy:
+        - In environments where ``alembic.ini`` is present (the
+          repository checkout, our Docker image) we run the Alembic
+          migrations programmatically. This keeps schema evolution
+          single-sourced through versioned scripts.
+        - Otherwise (e.g. a wheel install without the project files)
+          we fall back to ``Base.metadata.create_all`` so tests and
+          tiny embedded usages still work.
+
+        Idempotent: subsequent calls are no-ops once the schema is
+        marked ready.
+        """
         if self._schema_ready or not self._settings.enabled:
             return
+
+        ini_path = Path("alembic.ini")
+        if ini_path.exists():
+            try:
+                # Import lazily so the alembic dependency stays optional
+                # for the runtime path that uses create_all().
+                from alembic import command  # noqa: PLC0415
+                from alembic.config import Config  # noqa: PLC0415
+
+                # Run Alembic in a worker thread because its
+                # ``command.upgrade`` is sync. asyncio.to_thread keeps
+                # us inside the running event loop.
+                cfg = Config(str(ini_path))
+                # Hand the URL through env var so env.py picks it up
+                # without us mutating the global ``alembic.ini``.
+                import os  # noqa: PLC0415
+
+                os.environ["ALEMBIC_DATABASE_URL"] = self._settings.database_url
+                import asyncio  # noqa: PLC0415
+
+                await asyncio.to_thread(command.upgrade, cfg, "head")
+                self._schema_ready = True
+                return
+            except Exception:  # noqa: BLE001
+                # Fall back to create_all on any Alembic failure so a
+                # broken migration tree never bricks the application.
+                logger.exception(
+                    "alembic upgrade failed; falling back to create_all()"
+                )
+
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         self._schema_ready = True
