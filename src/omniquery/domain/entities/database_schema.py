@@ -12,6 +12,7 @@ class EngineType(str, Enum):
     ORACLE = "oracle"
     SQLITE = "sqlite"
     DUCKDB = "duckdb"
+    MSSQL = "mssql"
 
 
 @dataclass

@@ -19,6 +19,15 @@ class TestQuote:
     def test_oracle_falls_back_to_double_quote(self):
         assert _quote("oracle+oracledb://u:p@h/db", "FOO") == '"FOO"'
 
+    def test_mssql_uses_brackets(self):
+        assert _quote("mssql+aioodbc://u:p@h/db", "Customer") == "[Customer]"
+
+    def test_mssql_rejects_unsafe_bracket(self):
+        import pytest
+
+        with pytest.raises(ValueError):
+            _quote("mssql+aioodbc://u:p@h/db", "Bad]name")
+
     def test_escapes_quote_characters(self):
         assert _quote("postgresql+asyncpg://u:p@h/db", 'we"ird') == '"we""ird"'
         assert _quote("mysql+aiomysql://u:p@h/db", "ba`d") == "`ba``d`"

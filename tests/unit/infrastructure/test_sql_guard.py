@@ -92,6 +92,11 @@ class TestApplyLimit:
         assert "FETCH FIRST" in out.upper()
         assert "25" in out
 
+    def test_uses_fetch_first_for_mssql(self):
+        out = apply_limit("SELECT * FROM t", 25, EngineType.MSSQL)
+        assert "FETCH FIRST" in out.upper() or "FETCH NEXT" in out.upper()
+        assert "25" in out
+
     def test_preserves_existing_limit(self):
         out = apply_limit("SELECT * FROM t LIMIT 5", 999, EngineType.POSTGRESQL)
         assert "LIMIT 5" in out.upper()

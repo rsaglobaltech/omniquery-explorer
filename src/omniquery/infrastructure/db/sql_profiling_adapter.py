@@ -33,13 +33,25 @@ def _quote(connection_url: str, identifier: str) -> str:
     """Return ``identifier`` quoted using the dialect's identifier quoting.
 
     Picking quoting purely from the URL avoids carrying an engine type
-    down through the profiler API. MySQL/MariaDB use backticks; every
-    other engine we support uses ANSI double quotes.
+    down through the profiler API.
+    - MySQL/MariaDB → backticks.
+    - SQL Server → square brackets ``[name]`` (the canonical form;
+      ``"`` works only when QUOTED_IDENTIFIER is ON).
+    - Everything else → ANSI double quotes.
     """
     url = connection_url.lower()
     if "mysql" in url or "mariadb" in url:
         # Escape stray backticks to defend against malformed metadata.
         return "`" + identifier.replace("`", "``") + "`"
+    if "mssql" in url:
+        # Brackets can't be escaped portably; reject identifiers that
+        # contain a closing bracket rather than emit invalid SQL.
+        if "]" in identifier:
+            raise ValueError(
+                f"MSSQL identifier {identifier!r} contains ']' which "
+                "cannot be safely bracket-quoted."
+            )
+        return "[" + identifier + "]"
     return '"' + identifier.replace('"', '""') + '"'
 
 

@@ -4,6 +4,7 @@ import pytest
 
 from omniquery.infrastructure.db.adapter_factory import resolve_db_adapter
 from omniquery.infrastructure.db.duckdb_adapter import DuckDBAdapter
+from omniquery.infrastructure.db.mssql_adapter import MSSQLAdapter
 from omniquery.infrastructure.db.mysql_adapter import MySQLAdapter
 from omniquery.infrastructure.db.oracle_adapter import OracleAdapter
 from omniquery.infrastructure.db.postgresql_adapter import PostgreSQLAdapter
@@ -20,6 +21,7 @@ from omniquery.infrastructure.db.sqlite_adapter import SQLiteAdapter
         ("oracle+oracledb://u:p@h/d", OracleAdapter),
         ("sqlite+aiosqlite:///x.db", SQLiteAdapter),
         ("duckdb:///:memory:", DuckDBAdapter),
+        ("mssql+aioodbc://u:p@h:1433/db", MSSQLAdapter),
     ],
 )
 def test_resolves_by_url_prefix(url: str, expected: type) -> None:

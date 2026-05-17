@@ -29,6 +29,10 @@ _ENGINE_TO_DIALECT = {
     EngineType.POSTGRESQL: "postgres",
     EngineType.MYSQL: "mysql",
     EngineType.ORACLE: "oracle",
+    # sqlglot uses 'tsql' for SQL Server. SQLite and DuckDB run through
+    # the generic parser — leaving them mapped here would force the
+    # parser to a narrower grammar than necessary.
+    EngineType.MSSQL: "tsql",
 }
 
 _FORBIDDEN_FUNCTIONS = {
@@ -126,13 +130,17 @@ def apply_limit(
     if has_limit:
         return root.sql(dialect=dialect or None)
 
-    if engine == EngineType.ORACLE:
+    # Oracle and SQL Server both express the row cap via FETCH FIRST
+    # (Oracle 12c+ and TSQL 2012+ accept the same syntax). MSSQL also
+    # needs an explicit ORDER BY to legally use OFFSET … FETCH, but
+    # without OFFSET the FETCH FIRST form works on plain SELECTs.
+    if engine in (EngineType.ORACLE, EngineType.MSSQL):
         fetched = root.copy()
         fetched.set(
             "limit",
             exp.Fetch(direction="FIRST", count=exp.Literal.number(max_rows)),
         )
-        return fetched.sql(dialect="oracle")
+        return fetched.sql(dialect=dialect or None)
 
     limited = root.copy().limit(max_rows)
     return limited.sql(dialect=dialect or None)

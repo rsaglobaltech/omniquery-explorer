@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from omniquery.domain.ports.outbound.database_port import DatabasePort
 from omniquery.infrastructure.db.duckdb_adapter import DuckDBAdapter
+from omniquery.infrastructure.db.mssql_adapter import MSSQLAdapter
 from omniquery.infrastructure.db.mysql_adapter import MySQLAdapter
 from omniquery.infrastructure.db.oracle_adapter import OracleAdapter
 from omniquery.infrastructure.db.postgresql_adapter import PostgreSQLAdapter
@@ -17,6 +18,7 @@ _ENGINE_PREFIX_MAP: dict[str, DatabasePort] = {
     "oracle": OracleAdapter(),
     "sqlite": SQLiteAdapter(),
     "duckdb": DuckDBAdapter(),
+    "mssql": MSSQLAdapter(),
 }
 
 
