@@ -45,6 +45,7 @@ dev = [
     "ruff>=0.6",
     "bandit>=1.7,<2.0",
     "pip-audit>=2.7,<3.0",
+    "pyyaml>=6.0,<7.0",
 ]
 
 [tool.ruff]
@@ -79,4 +80,5 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "e2e: end-to-end tests that require external services (Ollama)",
+    "eval: text-to-SQL evaluation harness (requires Ollama or external LLM)",
 ]

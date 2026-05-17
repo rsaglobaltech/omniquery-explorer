@@ -1,0 +1,23 @@
+name: ecommerce
+
+fixture:
+  url: sqlite+aiosqlite:///.tmp/eval_ecommerce.db
+  ddl: tests/eval/fixtures/ecommerce.sql
+
+cases:
+  - id: customers-count
+    question: "How many customers are registered in total?"
+    expected_rows: [[5]]
+    tags: [count, easy]
+
+  - id: customers-by-country
+    question: "How many customers are there per country?"
+    tags: [distribution, easy]
+
+  - id: top-customer-by-spend
+    question: "Which customer has spent the most across all orders?"
+    tags: [join, medium]
+
+  - id: orders-2026-q1
+    question: "Total revenue in the first quarter of 2026."
+    tags: [date, medium]
