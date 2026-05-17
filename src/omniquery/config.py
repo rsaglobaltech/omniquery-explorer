@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-LlmProvider = Literal["ollama", "openai", "anthropic"]
+LlmProvider = Literal["ollama", "openai", "anthropic", "bedrock", "vertex"]
 Environment = Literal["development", "staging", "production"]
 # Languages supported by the localised prompt registry. ``auto`` means
 # the resolver inspects the question text on every call and picks the
@@ -37,6 +37,14 @@ class LlmSettings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     anthropic_api_key: SecretStr | None = None
     anthropic_base_url: str = "https://api.anthropic.com"
+    # AWS Bedrock — credentials resolved by boto3 (env vars, ~/.aws,
+    # instance role, ...). We only need the region; ``LLM_MODEL`` holds
+    # the Bedrock model id (e.g. anthropic.claude-3-5-sonnet-20241022-v2:0).
+    bedrock_region: str = "us-east-1"
+    # Google Vertex AI — same pattern: ADC handles auth, settings hold
+    # the project/region/publisher knobs.
+    vertex_project: str | None = None
+    vertex_region: str = "us-east5"
 
 
 class DatabaseSettings(BaseSettings):

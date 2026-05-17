@@ -42,4 +42,30 @@ def resolve_llm_adapter(settings: LlmSettings) -> LlmPort:
             timeout=settings.timeout,
             max_retries=settings.max_retries,
         )
+    if provider == "bedrock":
+        # boto3 imported lazily inside the adapter so users without
+        # the 'bedrock' extra never trip on a missing dep.
+        from omniquery.infrastructure.llm.bedrock_adapter import BedrockAdapter
+
+        return BedrockAdapter(
+            model=settings.model,
+            region=settings.bedrock_region,
+            timeout=settings.timeout,
+            max_retries=settings.max_retries,
+        )
+    if provider == "vertex":
+        # Requires both the 'vertex' extra (anthropic[vertex]) and a
+        # configured project; we fail fast with a clear message
+        # instead of letting the SDK raise on first call.
+        if not settings.vertex_project:
+            raise ValueError("LLM_VERTEX_PROJECT is required for provider=vertex")
+        from omniquery.infrastructure.llm.vertex_adapter import VertexAdapter
+
+        return VertexAdapter(
+            model=settings.model,
+            project=settings.vertex_project,
+            region=settings.vertex_region,
+            timeout=settings.timeout,
+            max_retries=settings.max_retries,
+        )
     raise ValueError(f"Unknown LLM provider: {provider}")
