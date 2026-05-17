@@ -18,7 +18,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | 4 | Persistencia (sesiones, historial, query log) | Alto | M | P0 | 🟡 | `b8a9ea9` (SQLite + ORM hechos; Alembic + Postgres prod pendientes) |
 | 5 | Cache de schema, profile y embeddings | Alto | S | P0 | 🟡 | `62095d6` (schema + embeddings; profile pendiente) |
 | 6 | Configuración tipada (Pydantic Settings) + gestión de secretos | Alto | S | P0 | ✅ | `0c08df2` |
-| 7 | Cobertura de tests >70% + harness de evaluación text-to-SQL | Alto | L | P1 | 🟡 | `e96bcc7` (unit tests añadidos; harness eval pendiente) |
+| 7 | Cobertura de tests >70% + harness de evaluación text-to-SQL | Alto | L | P1 | 🟡 | `e96bcc7` + `08bc570` (unit tests + harness skeleton + dataset YAML; baseline numérico pendiente) |
 | 8 | Observabilidad: OpenTelemetry + Langfuse | Medio | M | P1 | 🟡 | `76ea1a4` (OTel agent + LLM spans; Langfuse + Prometheus pendientes) |
 | 9 | Auth/RBAC + multi-tenant + workspace por usuario | Alto | L | P1 | 🟡 | `8705473` (API-key sólo; multi-tenant pendiente) |
 | 10 | Cost-guard para LLM y DB (EXPLAIN gate + budget) | Alto | M | P1 | 🟡 | `7ffbee7` (EXPLAIN gate + budget per-session; cost por workspace pendiente) |
@@ -30,7 +30,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | 16 | Agente de visualización inteligente (Vega-Lite) | Medio | M | P2 | ⬜ | — |
 | 17 | Librería de consultas guardadas + colaboración | Medio | M | P2 | ⬜ | — |
 | 18 | CI/CD (GitHub Actions) + Docker image multi-stage | Alto | S | P2 | 🟡 | `49e757d` + `a8eec4c` (CI + Dockerfile + compose hechos; release pipeline GHCR pendiente) |
-| 19 | Soporte BigQuery, Snowflake, DuckDB, SQLite | Alto | M | P2 | ⬜ | — |
+| 19 | Soporte BigQuery, Snowflake, DuckDB, SQLite | Alto | M | P2 | 🟡 | `0a20472` (SQLite + DuckDB hechos; BigQuery + Snowflake + MSSQL pendientes) |
 | 20 | Soporte de joins multi-hop con razonamiento de path | Medio | L | P3 | ⬜ | — |
 
 Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
@@ -54,6 +54,10 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-16 | `a8eec4c` | feat(docker): Dockerfile multi-stage + compose con Ollama |
 | 2026-05-16 | `7ffbee7` | feat(governance): cost-guard EXPLAIN + budget per-session |
 | 2026-05-16 | `74c8d32` | feat(governance): PII denylist + redact schema + mask rows |
+| 2026-05-17 | `d118166` | refactor(profiler): pool LRU + quoting dialect-aware |
+| 2026-05-17 | `0a20472` | feat(db): adapters SQLite + DuckDB |
+| 2026-05-17 | `57d3412` | ci: bandit + pip-audit |
+| 2026-05-17 | `08bc570` | feat(eval): harness text-to-SQL skeleton |
 
 ---
 
@@ -120,12 +124,12 @@ Hoy: `os.getenv` desperdigado en `container.py` y `cli/main.py`. Mejorar:
 
 ## 3. Bloque P1 — Robustez de producto
 
-### 3.1 Tests + Evaluación — 🟡 parcial (commit `e96bcc7`)
+### 3.1 Tests + Evaluación — 🟡 parcial (commits `e96bcc7`, `0a20472`, `08bc570`)
 
 Coverage actual: sólo `schema_linker` y `schema_graph_service`. Falta:
-- 🟡 Unit tests para `BaseSQLAdapter._apply_limit`, `_assert_read_only`, `OllamaAdapter._extract_sql`, parser de `_parse_proposed_questions`, scoring en `SchemaGraphService.score_tables`. (Hecho: sql_guard, disk_cache, config, parser. Falta: scoring, `_extract_sql`.)
-- ⬜ Integration tests con `pytest-postgresql` o `testcontainers` (Postgres + MySQL + Oracle XE).
-- ⬜ Harness de evaluación text-to-SQL: dataset propio (~50 preguntas) o porting de **Spider/Bird** subset; métricas: execution accuracy, exact match, ratio de queries que requirieron `fix_sql`, latencia p50/p95 por modelo.
+- 🟡 Unit tests para `BaseSQLAdapter._apply_limit`, `_assert_read_only`, `OllamaAdapter._extract_sql`, parser de `_parse_proposed_questions`, scoring en `SchemaGraphService.score_tables`. (Hecho: sql_guard, disk_cache, config, parser, cost_guard, pii, profiler quoting, adapter_factory. Falta: scoring, `_extract_sql`.)
+- 🟡 Integration tests: SQLite via aiosqlite (`tests/integration/db/test_sqlite_adapter.py`). ⬜ Postgres + MySQL + Oracle XE con testcontainers.
+- 🟡 Harness de evaluación text-to-SQL skeleton (`tests/eval/`): dataset YAML, runner que calcula execution_accuracy, fix_rate, latency_p50/p95. ⬜ Dataset Spider/Bird subset y baseline publicado por modelo.
 - ⬜ Smoke test E2E que ejecute `ask` contra `dbs/` muestreado.
 
 ### 3.2 Observabilidad — 🟡 parcial (commit `76ea1a4`)
@@ -168,9 +172,9 @@ Hoy hay logging JSON estructurado (bien). Faltan:
 - ⬜ Generar prompts conscientes del dialecto (`schema.engine.value` ya disponible).
 - ✅ Tests por dialecto en `tests/unit/infrastructure/test_sql_guard.py`.
 
-### 3.7 Pool reutilizable — 🟡 parcial (commit `f219d38`)
+### 3.7 Pool reutilizable — ✅ hecho (commits `f219d38`, `d118166`)
 
-✅ `BaseSQLAdapter` ahora obtiene engines de un pool LRU process-wide (`engine_pool.py`). 🟡 `sql_profiling_adapter` aún crea engine por tabla — pendiente migrar.
+✅ `BaseSQLAdapter` y `SqlProfilingAdapter` obtienen engines del pool LRU process-wide (`engine_pool.py`). ✅ Profiler también usa quoting dialect-aware (`backticks` para MySQL, `"` resto).
 
 `BaseSQLAdapter` crea y descarta `AsyncEngine` por llamada (`get_schema`, `execute_query`, `_row_count`, `_column_info` en `sql_profiling_adapter` …). Reutilizar un pool por `connection_url` en el adapter, con cierre coordinado al apagar el container. Permite además cancelar queries en curso vía `connection.invalidate()`.
 
@@ -198,9 +202,9 @@ Hoy `chart_query_results` decide chart por heurística. Sustituir por un agente 
 - Compartir entre usuarios del workspace.
 - Re-ejecutar como reporte programado (cron).
 
-### 4.5 CI/CD + Docker — 🟡 parcial (commits `49e757d`, `a8eec4c`)
+### 4.5 CI/CD + Docker — 🟡 parcial (commits `49e757d`, `a8eec4c`, `57d3412`)
 
-- 🟡 `.github/workflows/ci.yml`: lint (ruff hecho), ⬜ typecheck (mypy/pyright), ✅ tests, ⬜ security scan (bandit, pip-audit).
+- 🟡 `.github/workflows/ci.yml`: ✅ lint (ruff), ⬜ typecheck (mypy/pyright), ✅ tests, ✅ security scan (bandit medium+ gate, pip-audit).
 - ⬜ `.github/workflows/release.yml`: build wheel + Docker image (multi-arch buildx), publish a GHCR.
 - ✅ `Dockerfile` multi-stage: builder con `uv`, runtime slim, non-root user (uid 1000), HEALTHCHECK contra `/health`.
 - ✅ `docker-compose.yml` que orqueste app + Ollama con volúmenes para modelos y persistencia SQLite.
@@ -280,7 +284,7 @@ A partir de aquí: UI Web, multi-tenant completo, soporte BigQuery/Snowflake, ca
 Checklist mínimo de release v1.0:
 
 - [ ] Tests con cobertura ≥70% en `application/` y `infrastructure/` (parcial — falta scoring + use_case)
-- [ ] Pipeline CI verde (lint + typecheck + tests + security scan) — lint+tests hechos; falta typecheck + bandit
+- [x] Pipeline CI con lint + tests + bandit + pip-audit (typecheck mypy pendiente)
 - [x] Dockerfile + docker-compose locales (publicación a registry pendiente)
 - [x] Web API documentada con OpenAPI (auto-FastAPI) + `docker compose up`
 - [x] Autenticación por API key activa por defecto
@@ -289,4 +293,4 @@ Checklist mínimo de release v1.0:
 - [x] Soporte de al menos 2 proveedores LLM además de Ollama (OpenAI + Anthropic)
 - [x] Trazas OpenTelemetry exportables (vía OTLP/HTTP cuando se habilita)
 - [ ] Documentación de despliegue para una máquina y para Kubernetes
-- [ ] Harness de evaluación text-to-SQL con baseline publicado en README
+- [ ] Harness de evaluación text-to-SQL con baseline publicado en README (skeleton hecho)
