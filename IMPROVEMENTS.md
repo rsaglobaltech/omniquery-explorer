@@ -14,7 +14,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 |---|---|---|---|---|---|---|
 | 1 | Hardening SQL (sqlglot AST + role read-only + timeouts) | Alto | M | P0 | 🟡 | `34a9ba4` + `f219d38` (AST y timeouts hechos; rol DB pendiente) |
 | 2 | Multi-LLM provider (OpenAI / Anthropic / Bedrock / Ollama) | Alto | M | P0 | 🟡 | `9aec4e5` (OpenAI + Anthropic hechos; Bedrock/Vertex pendientes) |
-| 3 | FastAPI Web Adapter + SSE streaming | Alto | M | P0 | ✅ | `8705473` + `238c30b` (SSE + API-key + rate limiter; cancelación SSE pendiente) |
+| 3 | FastAPI Web Adapter + SSE streaming | Alto | M | P0 | ✅ | `8705473` + `238c30b` + `a88809e` (SSE + API-key + rate limiter + cancelación client-disconnect) |
 | 4 | Persistencia (sesiones, historial, query log) | Alto | M | P0 | ✅ | `b8a9ea9` + `28fd907` (SQLite + ORM + Alembic migrations) |
 | 5 | Cache de schema, profile y embeddings | Alto | S | P0 | 🟡 | `62095d6` (schema + embeddings; profile pendiente) |
 | 6 | Configuración tipada (Pydantic Settings) + gestión de secretos | Alto | S | P0 | ✅ | `0c08df2` |
@@ -30,7 +30,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | 16 | Agente de visualización inteligente (Vega-Lite) | Medio | M | P2 | ⬜ | — |
 | 17 | Librería de consultas guardadas + colaboración | Medio | M | P2 | ⬜ | — |
 | 18 | CI/CD (GitHub Actions) + Docker image multi-stage | Alto | S | P2 | ✅ | `49e757d` + `a8eec4c` + `057d3412` + `053fa3a` + `10bcbf2` (CI lint/mypy/tests/bandit/pip-audit + Dockerfile + compose + release pipeline GHCR multi-arch con SBOM) |
-| 19 | Soporte BigQuery, Snowflake, DuckDB, SQLite | Alto | M | P2 | 🟡 | `0a20472` (SQLite + DuckDB hechos; BigQuery + Snowflake + MSSQL pendientes) |
+| 19 | Soporte BigQuery, Snowflake, DuckDB, SQLite | Alto | M | P2 | 🟡 | `0a20472` + `70a27a2` (SQLite + DuckDB + MSSQL hechos; BigQuery + Snowflake pendientes) |
 | 20 | Soporte de joins multi-hop con razonamiento de path | Medio | L | P3 | ⬜ | — |
 
 Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
@@ -67,6 +67,9 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-17 | `8c5c29d` | docs(readme): rewrite post-P0/P1 |
 | 2026-05-17 | `b716dca` | docs(readme): full English README profesional |
 | 2026-05-17 | `c8518ba` | feat(i18n): prompts EN/ES con auto-detect |
+| 2026-05-17 | `a88809e` | feat(web): SSE cancellation libera conexión DB |
+| 2026-05-17 | `70a27a2` | feat(db): MSSQL adapter (aioodbc optional) + FETCH + brackets |
+| 2026-05-17 | `a1c1985` | feat(memory): LangGraph checkpoints + thread_id |
 
 ---
 
@@ -244,7 +247,9 @@ Para "ventas en España", muestrear `country` distinct y mapear "España" → `E
 
 Tras `generate_report`, un agente crítico evalúa coherencia entre `raw_data` y conclusiones; si baja confianza, re-ejecuta con prompt corregido.
 
-### 5.4 Modo conversacional con memoria
+### 5.4 Modo conversacional con memoria — 🟡 parcial (commit `a1c1985`)
+
+✅ LangGraph compile con checkpointer opcional (`MemorySaver` builtin · `SqliteSaver` extra). ✅ `thread_id` propagado por `EdaSessionGraph.run` y `AskRequest`. ⬜ `EdaSessionGraph` aún expone solo el estado del último turno — falta agregar resumen condensado del histórico al prompt.
 
 Hoy cada `ask` es stateless. Añadir memoria de turno con resumen de queries previas (LangGraph checkpoints — `MemorySaver`/`SqliteSaver`).
 
