@@ -103,6 +103,7 @@ Under the hood, a **LangGraph state machine** runs eight specialised agents:
 ### 🚀 Two first-class interfaces
 
 - **CLI** (`omniquery`) with `ask`, `explore`, `suggest`, `profile`, `schema`. Rich tables, charts, progress spinners.
+- **Web UI** (`omniquery-ui` → Streamlit): chat panel, schema browser, multi-agent explore tab, session history, CSV download. Install the `[ui]` extra to enable.
 - **HTTP API** (`omniquery-web` → `uvicorn`):
   - `POST /ask` — synchronous JSON.
   - `POST /ask/stream` — **Server-Sent Events** streaming agent-by-agent (`started`, `sql`, `rows`, `report`, `done`).
@@ -193,6 +194,14 @@ docker compose exec ollama ollama pull llama3.2:latest
 
 curl http://localhost:8000/health
 # {"status":"ok","environment":"development","llm_provider":"ollama","llm_model":"llama3.2:latest"}
+```
+
+### Option A.bis — Streamlit Web UI
+
+```bash
+pip install 'omniquery-explorer[ui]'
+omniquery-ui              # launches Streamlit on :8501
+# Open http://localhost:8501 and paste your connection URL in the sidebar.
 ```
 
 ### Option B — Local install with `uv`

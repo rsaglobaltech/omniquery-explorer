@@ -25,7 +25,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | 11 | PII masking + column allowlist / denylist por rol | Alto | M | P1 | 🟡 | `74c8d32` (denylist + masking hechos; allowlist por rol pendiente) |
 | 12 | Dialect-aware SQL emission (LIMIT vs FETCH FIRST, quoting) | Medio | S | P1 | 🟡 | `34a9ba4` (LIMIT/FETCH hecho; quoting/prompts pendientes) |
 | 13 | Connection pool reutilizable + cancelación de queries | Medio | S | P1 | 🟡 | `f219d38` (pool LRU hecho; cancelación SSE pendiente) |
-| 14 | UI Web (Next.js o Streamlit) | Alto | L | P2 | ⬜ | — |
+| 14 | UI Web (Next.js o Streamlit) | Alto | L | P2 | 🟡 | `57f69a6` (Streamlit MVP — chat + explore + schema + history; Next.js producto pendiente) |
 | 15 | Cache semántico de preguntas similares | Medio | M | P2 | ✅ | `24ac911` (cosine + per-DB partition + eviction + use_case hook) |
 | 16 | Agente de visualización inteligente (Vega-Lite) | Medio | M | P2 | ⬜ | — |
 | 17 | Librería de consultas guardadas + colaboración | Medio | M | P2 | ⬜ | — |
@@ -75,6 +75,7 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-17 | `664d4b5` | ci(release): publish-pypi job (OIDC Trusted Publishing) |
 | 2026-05-17 | `d9f8c98` | feat(cli): --thread-id + --language flags |
 | 2026-05-17 | `7f75a7e` | feat(llm): Bedrock + Vertex adapters (optional extras) |
+| 2026-05-17 | `57f69a6` | feat(ui): Streamlit MVP (chat + explore + schema + history) |
 
 ---
 
@@ -199,7 +200,9 @@ Hoy hay logging JSON estructurado (bien). Faltan:
 
 ## 4. Bloque P2 — Diferenciación
 
-### 4.1 UI Web
+### 4.1 UI Web — 🟡 parcial (commit `57f69a6`)
+
+✅ **Streamlit MVP** (`omniquery-ui`): sidebar para conexión + LLM + idioma + thread_id; 4 tabs (💬 Ask, 🧭 Explore, 🗂️ Schema, 📜 History); descarga CSV; dataframes interactivos. Opcional extra `[ui]`. ⬜ Next.js producto con chat estilo Hex/Mode pendiente.
 
 - **Opción A (rápida)**: Streamlit/Gradio para prototipo interno.
 - **Opción B (producto)**: Next.js + shadcn/ui — chat, vista de schema (D3 force graph), tabla resultados, editor SQL con diff cuando el `fix_sql` modifica la query, descarga CSV/Parquet.
