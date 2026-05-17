@@ -65,6 +65,8 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-17 | `d446a00` | test: coverage RunEdaUseCase + score_tables |
 | 2026-05-17 | `c956d09` | docs(deploy): DEPLOYMENT.md + k8s manifests |
 | 2026-05-17 | `8c5c29d` | docs(readme): rewrite post-P0/P1 |
+| 2026-05-17 | `b716dca` | docs(readme): full English README profesional |
+| 2026-05-17 | `c8518ba` | feat(i18n): prompts EN/ES con auto-detect |
 
 ---
 
@@ -254,7 +256,7 @@ Hoy cada `ask` es stateless. Añadir memoria de turno con resumen de queries pre
 |---|---|---|
 | `eda_session_graph.py:353,385` | Llama `self._llm._chat()` (método "privado") | Añadir método público al `LlmPort` |
 | `eda_session_graph.py:305` | `re.match(r"^xref_p\d+", ...)` hardcoded — específico de RNAcentral | Extraer a config / blacklist de prefijos por workspace |
-| `eda_session_graph.py:334` | Prompt en español dentro del código | Mover a `prompts/*.md` con plantillas Jinja2; soportar locale |
+| ~~`eda_session_graph.py:334`~~ | ~~Prompt en español dentro del código~~ | ✅ Resuelto en `c8518ba`: templates en `infrastructure/llm/i18n.py` con locale EN/ES y auto-detect |
 | `ollama_adapter.py:243` | Nuevo `httpx.AsyncClient` por llamada | Cliente compartido como atributo, cerrado al teardown del container |
 | `ollama_adapter.py:29` | `_SYSTEM_PROMPT_PATH = Path(__file__).parents[4]` — frágil ante reubicaciones | Resolver vía `importlib.resources` o variable de config |
 | `base_sql_adapter.py:97` | `_apply_limit` no es dialect-aware | sqlglot transpile |

@@ -87,10 +87,11 @@ Under the hood, a **LangGraph state machine** runs eight specialised agents:
 - **Self-healing retry loop**: on `ProgrammingError`/`OperationalError`, the verified DDL + the DB's own message are fed back to the LLM; bounded by configurable retries.
 - **Per-statement timeout**: `SET LOCAL statement_timeout` (Postgres), `SET SESSION MAX_EXECUTION_TIME` (MySQL), `asyncio.wait_for` fallback (Oracle).
 
-### 🌐 Multi-engine, multi-LLM
+### 🌐 Multi-engine, multi-LLM, multilingual
 
 - **Engines**: 🐘 PostgreSQL · 🐬 MySQL/MariaDB · 🟧 Oracle · 🪶 SQLite · 🦆 DuckDB.
 - **LLMs**: 🦙 Ollama (fully local) · 🤖 OpenAI · 🧠 Anthropic. Switch with one env var; provider-specific retries via `tenacity`.
+- **Languages**: 🇬🇧 English · 🇪🇸 Spanish, with `LLM_LANGUAGE=auto` to detect per question. The model answers questions, returns reports, and produces DB summaries in the same language the analyst asked in.
 - **Pooled `AsyncEngine`**: process-wide LRU cache, `pool_pre_ping`, recycle every 30 min. No engine churn per query.
 
 ### 💰 Governance built-in
@@ -330,6 +331,7 @@ Every knob is a typed Pydantic Setting. Source of truth: [`src/omniquery/config.
 | `LLM_EMBEDDING_MODEL`     | `nomic-embed-text`   | Used by the semantic schema linker.          |
 | `LLM_TIMEOUT`             | `300.0`              | HTTP timeout in seconds.                     |
 | `LLM_MAX_RETRIES`         | `3`                  | Tenacity retry attempts on 5xx / 429.        |
+| `LLM_LANGUAGE`            | `auto`               | `en` · `es` · `auto` (detect per question).  |
 | `LLM_OLLAMA_BASE_URL`     | `http://localhost:11434` | Ollama HTTP endpoint.                    |
 | `LLM_OPENAI_API_KEY`      | _unset_              | Required when `provider=openai`.             |
 | `LLM_ANTHROPIC_API_KEY`   | _unset_              | Required when `provider=anthropic`.          |
