@@ -13,7 +13,7 @@ Leyenda estado: ✅ hecho · 🟡 parcial · ⬜ pendiente.
 | # | Iniciativa | Impacto | Esfuerzo | Prioridad | Estado | Commit |
 |---|---|---|---|---|---|---|
 | 1 | Hardening SQL (sqlglot AST + role read-only + timeouts) | Alto | M | P0 | 🟡 | `34a9ba4` + `f219d38` (AST y timeouts hechos; rol DB pendiente) |
-| 2 | Multi-LLM provider (OpenAI / Anthropic / Bedrock / Ollama) | Alto | M | P0 | 🟡 | `9aec4e5` (OpenAI + Anthropic hechos; Bedrock/Vertex pendientes) |
+| 2 | Multi-LLM provider (OpenAI / Anthropic / Bedrock / Ollama) | Alto | M | P0 | ✅ | `9aec4e5` + `7f75a7e` (Ollama + OpenAI + Anthropic + Bedrock + Vertex) |
 | 3 | FastAPI Web Adapter + SSE streaming | Alto | M | P0 | ✅ | `8705473` + `238c30b` + `a88809e` (SSE + API-key + rate limiter + cancelación client-disconnect) |
 | 4 | Persistencia (sesiones, historial, query log) | Alto | M | P0 | ✅ | `b8a9ea9` + `28fd907` (SQLite + ORM + Alembic migrations) |
 | 5 | Cache de schema, profile y embeddings | Alto | S | P0 | 🟡 | `62095d6` (schema + embeddings; profile pendiente) |
@@ -71,6 +71,10 @@ Leyenda esfuerzo: S = 1-3 días · M = 1-2 semanas · L = ≥1 sprint.
 | 2026-05-17 | `70a27a2` | feat(db): MSSQL adapter (aioodbc optional) + FETCH + brackets |
 | 2026-05-17 | `a1c1985` | feat(memory): LangGraph checkpoints + thread_id |
 | 2026-05-17 | `24ac911` | feat(cache): semantic question cache (cosine + per-DB) |
+| 2026-05-17 | `a7a4def` | chore(pypi): LICENSE + metadata + version 0.2.0 |
+| 2026-05-17 | `664d4b5` | ci(release): publish-pypi job (OIDC Trusted Publishing) |
+| 2026-05-17 | `d9f8c98` | feat(cli): --thread-id + --language flags |
+| 2026-05-17 | `7f75a7e` | feat(llm): Bedrock + Vertex adapters (optional extras) |
 
 ---
 

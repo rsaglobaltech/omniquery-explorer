@@ -90,7 +90,7 @@ Under the hood, a **LangGraph state machine** runs eight specialised agents:
 ### 🌐 Multi-engine, multi-LLM, multilingual
 
 - **Engines**: 🐘 PostgreSQL · 🐬 MySQL/MariaDB · 🟧 Oracle · 🪶 SQLite · 🦆 DuckDB.
-- **LLMs**: 🦙 Ollama (fully local) · 🤖 OpenAI · 🧠 Anthropic. Switch with one env var; provider-specific retries via `tenacity`.
+- **LLMs**: 🦙 Ollama (fully local) · 🤖 OpenAI · 🧠 Anthropic · ☁️ AWS Bedrock · ☁️ Google Vertex AI. Switch with one env var; provider-specific retries via `tenacity`.
 - **Languages**: 🇬🇧 English · 🇪🇸 Spanish, with `LLM_LANGUAGE=auto` to detect per question. The model answers questions, returns reports, and produces DB summaries in the same language the analyst asked in.
 - **Pooled `AsyncEngine`**: process-wide LRU cache, `pool_pre_ping`, recycle every 30 min. No engine churn per query.
 
@@ -326,7 +326,7 @@ Every knob is a typed Pydantic Setting. Source of truth: [`src/omniquery/config.
 
 | Variable                  | Default              | Description                                  |
 |---------------------------|----------------------|----------------------------------------------|
-| `LLM_PROVIDER`            | `ollama`             | `ollama` · `openai` · `anthropic`.           |
+| `LLM_PROVIDER`            | `ollama`             | `ollama` · `openai` · `anthropic` · `bedrock` · `vertex`. |
 | `LLM_MODEL`               | `llama3.2:latest`    | Provider-specific model identifier.          |
 | `LLM_EMBEDDING_MODEL`     | `nomic-embed-text`   | Used by the semantic schema linker.          |
 | `LLM_TIMEOUT`             | `300.0`              | HTTP timeout in seconds.                     |
@@ -335,6 +335,9 @@ Every knob is a typed Pydantic Setting. Source of truth: [`src/omniquery/config.
 | `LLM_OLLAMA_BASE_URL`     | `http://localhost:11434` | Ollama HTTP endpoint.                    |
 | `LLM_OPENAI_API_KEY`      | _unset_              | Required when `provider=openai`.             |
 | `LLM_ANTHROPIC_API_KEY`   | _unset_              | Required when `provider=anthropic`.          |
+| `LLM_BEDROCK_REGION`      | `us-east-1`          | AWS region for Bedrock (creds from boto3 chain). |
+| `LLM_VERTEX_PROJECT`      | _unset_              | GCP project id for Vertex AI (ADC for creds). |
+| `LLM_VERTEX_REGION`       | `us-east5`           | Vertex region.                               |
 
 ### 🗄️ Target database
 
