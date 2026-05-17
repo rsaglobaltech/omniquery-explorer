@@ -1,7 +1,8 @@
 name: Release
 
 # Triggered by:
-# - Pushing a semver tag (vX.Y.Z) → builds and publishes the image.
+# - Pushing a semver tag (vX.Y.Z) → builds and publishes the image and
+#   the PyPI wheel + sdist.
 # - Manual workflow_dispatch with a custom tag (debug / re-run).
 on:
   push:
@@ -14,8 +15,9 @@ on:
         required: false
         default: ""
 
-# Allow the workflow to push packages to GHCR using the ephemeral
-# GITHUB_TOKEN — no extra secrets to manage.
+# - contents:read   — checkout
+# - packages:write  — push to GHCR
+# - id-token:write  — OIDC for PyPI Trusted Publishing (no API token)
 permissions:
   contents: read
   packages: write
@@ -80,3 +82,40 @@ jobs:
 
       - name: Image digest
         run: echo "Published digest=${{ steps.meta.outputs.digest }}"
+
+  publish-pypi:
+    name: Build wheel + sdist and publish to PyPI
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # PyPI Trusted Publishing matches the environment name on the
+    # publisher rule (configure under PyPI project → Manage → Publishing).
+    environment:
+      name: pypi
+      url: https://pypi.org/p/omniquery-explorer
+    # No need to wait on the Docker build — PyPI publish is independent.
+    # Keep them parallel so a slow Docker job doesn't delay the wheel.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Publish to PyPI (Trusted Publisher / OIDC)
+        # No API token required: PyPI authenticates this workflow via
+        # OIDC. The publisher rule on PyPI must allow this repo +
+        # release.yml + environment 'pypi'.
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          # Don't fail the run if the same version already exists —
+          # useful for re-runs that skip the duplicate gracefully.
+          skip-existing: true
