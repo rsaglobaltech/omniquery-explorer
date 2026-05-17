@@ -10,6 +10,8 @@ class EngineType(str, Enum):
     POSTGRESQL = "postgresql"
     MYSQL = "mysql"
     ORACLE = "oracle"
+    SQLITE = "sqlite"
+    DUCKDB = "duckdb"
 
 
 @dataclass

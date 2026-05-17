@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 from omniquery.domain.ports.outbound.database_port import DatabasePort
+from omniquery.infrastructure.db.duckdb_adapter import DuckDBAdapter
 from omniquery.infrastructure.db.mysql_adapter import MySQLAdapter
 from omniquery.infrastructure.db.oracle_adapter import OracleAdapter
 from omniquery.infrastructure.db.postgresql_adapter import PostgreSQLAdapter
+from omniquery.infrastructure.db.sqlite_adapter import SQLiteAdapter
 
+# Map of URL scheme → adapter singleton. The scheme is the part before
+# the first '+' or '://' (e.g. "postgresql+asyncpg" → "postgresql").
 _ENGINE_PREFIX_MAP: dict[str, DatabasePort] = {
     "postgresql": PostgreSQLAdapter(),
     "postgres": PostgreSQLAdapter(),
     "mysql": MySQLAdapter(),
     "mariadb": MySQLAdapter(),
     "oracle": OracleAdapter(),
+    "sqlite": SQLiteAdapter(),
+    "duckdb": DuckDBAdapter(),
 }
 
 
