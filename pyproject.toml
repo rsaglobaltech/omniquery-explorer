@@ -105,10 +105,17 @@ vertex = [
 memory = [
     "langgraph-checkpoint-sqlite>=2.0,<3.0",
 ]
+# Streamlit web UI (chat + schema explorer + SQL diff + CSV download).
+# Install with: `pip install '.[ui]'`. Launch with: `omniquery-ui`.
+ui = [
+    "streamlit>=1.38,<2.0",
+    "pandas>=2.0,<3.0",
+]
 
 [project.scripts]
 omniquery = "omniquery.adapters.cli.main:app"
 omniquery-web = "omniquery.adapters.web.runner:main"
+omniquery-ui = "omniquery.adapters.streamlit_ui.runner:main"
 
 [dependency-groups]
 dev = [
