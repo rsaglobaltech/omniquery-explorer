@@ -1,7 +1,12 @@
 # ── Sensitive / private content ───────────────────────────────────────────────
 prompts/
 dbs/
-docs/
+# Within docs/ only ignore the heavy PDFs and private notes; committed
+# docs (DEPLOYMENT.md, ARCHITECTURE.md, system_prompt.md, ...) live at
+# the top level of docs/ and are versioned.
+docs/pdf/
+docs/private/
+docs/.DS_Store
 
 # ── Python bytecode & caches ──────────────────────────────────────────────────
 __pycache__/

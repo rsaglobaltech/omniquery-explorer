@@ -1,0 +1,30 @@
+# Optional: ingress-nginx example. Adapt to your controller (Traefik,
+# AWS ALB, GKE GCE, ...). The path is intentionally generic — the API
+# does not require a specific prefix.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omniquery-api
+  namespace: omniquery
+  annotations:
+    # Server-Sent Events need a long read timeout. /ask/stream may
+    # stream events for the full duration of an EDA run.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: omniquery.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: omniquery-api
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - omniquery.example.com
+      secretName: omniquery-tls
