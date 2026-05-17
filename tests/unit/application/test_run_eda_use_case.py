@@ -14,11 +14,14 @@ import pytest
 from sqlalchemy.exc import ProgrammingError
 
 from omniquery.application.use_cases.run_eda_use_case import RunEdaUseCase
-from omniquery.config import CostGuardSettings, PiiSettings
+from omniquery.config import CostGuardSettings, PiiSettings, SemanticCacheSettings
 from omniquery.domain.entities.database_schema import DatabaseSchema
 from omniquery.domain.entities.eda_query import EdaQuery
 from omniquery.domain.ports.outbound.database_port import DatabasePort
+from omniquery.domain.ports.outbound.embedding_port import EmbeddingPort
 from omniquery.domain.ports.outbound.llm_port import LlmPort
+from omniquery.infrastructure.cache.disk_cache import DiskCache
+from omniquery.infrastructure.cache.semantic_cache import SemanticQueryCache
 from omniquery.infrastructure.governance.cost_guard import BudgetTracker
 from omniquery.infrastructure.governance.pii_policy import PiiPolicy
 
@@ -171,6 +174,66 @@ async def test_pii_redacts_schema_and_masks_rows(
     # Returned rows have 'email' replaced with the default mask.
     assert result.raw_data[0]["email"] == "***"
     assert result.raw_data[0]["name"] == "Ana"
+
+
+class _ConstantEmbedder(EmbeddingPort):
+    """Returns the same vector for every text so cosine = 1.0 always."""
+
+    async def embed(self, text: str) -> list[float]:
+        return [1.0, 0.0, 0.0]
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        return [await self.embed(t) for t in texts]
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_hit_skips_llm_generate_sql(
+    tmp_path, simple_schema: DatabaseSchema, query: EdaQuery
+) -> None:
+    """A pre-populated cache entry must short-circuit generate_sql."""
+    cache = SemanticQueryCache(
+        SemanticCacheSettings(enabled=True, threshold=0.5),
+        _ConstantEmbedder(),
+        DiskCache(tmp_path, "semantic_use_case"),
+    )
+    # Pre-seed an entry against the same connection URL the query uses.
+    await cache.store(
+        "Top customers?", "SELECT name FROM customers LIMIT 3", query.connection_url
+    )
+
+    db = FakeDB(simple_schema, rows=[{"name": "Ana"}])
+
+    class _ExplosiveLLM(FakeLLM):
+        async def generate_sql(self, schema, query):  # pragma: no cover
+            raise AssertionError("generate_sql must not be called on cache hit")
+
+    llm = _ExplosiveLLM()
+    use_case = RunEdaUseCase(db=db, llm=llm, semantic_cache=cache)
+
+    result = await use_case.run_eda(query)
+    assert not result.error
+    # SQL came from the cache, not the LLM.
+    assert result.generated_sql == "SELECT name FROM customers LIMIT 3"
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_stores_on_miss(
+    tmp_path, simple_schema: DatabaseSchema, query: EdaQuery
+) -> None:
+    """A successful miss must produce a new cache entry."""
+    cache = SemanticQueryCache(
+        SemanticCacheSettings(enabled=True, threshold=0.5),
+        _ConstantEmbedder(),
+        DiskCache(tmp_path, "semantic_use_case_2"),
+    )
+    db = FakeDB(simple_schema, rows=[{"id": 1}])
+    use_case = RunEdaUseCase(db=db, llm=FakeLLM(), semantic_cache=cache)
+
+    assert cache.snapshot() == []
+    await use_case.run_eda(query)
+    snap = cache.snapshot()
+    assert len(snap) == 1
+    assert snap[0].generated_sql == "SELECT * FROM customers"
 
 
 @pytest.mark.asyncio

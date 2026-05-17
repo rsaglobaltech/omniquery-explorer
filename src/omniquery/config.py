@@ -67,6 +67,31 @@ class CacheSettings(BaseSettings):
         return v.resolve()
 
 
+class SemanticCacheSettings(BaseSettings):
+    """Semantic cache of (question → generated_sql) pairs (P2.15).
+
+    Each successful run is embedded and stored. On the next question
+    we look up the closest past entry by cosine similarity and, if it
+    crosses ``threshold``, reuse its SQL — skipping the LLM altogether.
+
+    Disabled by default because reuse must be opt-in: the SQL may be
+    out of date if the schema changed since it was first produced.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="SEMANTIC_CACHE_", extra="ignore")
+
+    enabled: bool = False
+    # Minimum cosine similarity to count as a hit. 0.92 keeps recall
+    # high while rejecting paraphrases that change analytical intent
+    # (e.g. "top customers" vs "least active customers").
+    threshold: float = 0.92
+    # Cap on stored entries; oldest entries are evicted first. Cosine
+    # search is linear so this also caps lookup latency.
+    max_entries: int = 500
+    # Bucket name under CACHE_DIR (the parent CacheSettings owns the root).
+    namespace: str = "semantic_queries"
+
+
 class MemorySettings(BaseSettings):
     """Conversational memory (LangGraph checkpoints) configuration.
 
@@ -182,6 +207,7 @@ class Settings(BaseSettings):
     cache: CacheSettings = Field(default_factory=CacheSettings)
     persistence: PersistenceSettings = Field(default_factory=PersistenceSettings)
     memory: MemorySettings = Field(default_factory=MemorySettings)
+    semantic_cache: SemanticCacheSettings = Field(default_factory=SemanticCacheSettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
     cost: CostGuardSettings = Field(default_factory=CostGuardSettings)
     pii: PiiSettings = Field(default_factory=PiiSettings)

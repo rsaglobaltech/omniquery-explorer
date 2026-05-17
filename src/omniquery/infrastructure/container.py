@@ -11,6 +11,8 @@ from omniquery.domain.ports.outbound.embedding_port import EmbeddingPort
 from omniquery.domain.ports.outbound.llm_port import LlmPort
 from omniquery.infrastructure.cache.cached_database import CachedDatabasePort
 from omniquery.infrastructure.cache.cached_embedding import CachedEmbeddingPort
+from omniquery.infrastructure.cache.disk_cache import DiskCache
+from omniquery.infrastructure.cache.semantic_cache import SemanticQueryCache
 from omniquery.infrastructure.db.adapter_factory import resolve_db_adapter
 from omniquery.infrastructure.db.sql_profiling_adapter import SqlProfilingAdapter
 from omniquery.infrastructure.governance.cost_guard import BudgetTracker
@@ -64,6 +66,17 @@ class Container:
         # shares the same saver — that's how separate /ask calls with
         # the same thread_id see each other's state.
         self._checkpointer = resolve_checkpointer(self._settings.memory)
+        # Semantic question cache. Shares the on-disk root with the
+        # other caches but lives under its own namespace so its
+        # serialised list never collides with schema/embedding pickles.
+        self._semantic_cache = SemanticQueryCache(
+            settings=self._settings.semantic_cache,
+            embedder=self._emb,
+            disk=DiskCache(
+                self._settings.cache.dir,
+                self._settings.semantic_cache.namespace,
+            ),
+        )
 
     @property
     def settings(self) -> Settings:
@@ -86,6 +99,7 @@ class Container:
             store=self._store,
             budget=self._budget,
             pii=self._pii,
+            semantic_cache=self._semantic_cache,
         )
 
     def eda_session_graph(self, connection_url: str) -> EdaSessionGraph:

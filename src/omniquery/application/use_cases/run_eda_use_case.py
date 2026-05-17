@@ -10,6 +10,7 @@ from omniquery.domain.entities.eda_query import EdaQuery
 from omniquery.domain.ports.inbound.eda_use_case import EdaUseCase
 from omniquery.domain.ports.outbound.database_port import DatabasePort
 from omniquery.domain.ports.outbound.llm_port import LlmPort
+from omniquery.infrastructure.cache.semantic_cache import SemanticQueryCache
 from omniquery.infrastructure.governance.cost_guard import BudgetExceeded, BudgetTracker
 from omniquery.infrastructure.governance.pii_policy import PiiPolicy
 from omniquery.infrastructure.persistence.session_store import PersistenceStore
@@ -40,6 +41,7 @@ class RunEdaUseCase(EdaUseCase):
         store: PersistenceStore | None = None,
         budget: BudgetTracker | None = None,
         pii: PiiPolicy | None = None,
+        semantic_cache: SemanticQueryCache | None = None,
     ) -> None:
         self._db = db
         self._llm = llm
@@ -52,6 +54,12 @@ class RunEdaUseCase(EdaUseCase):
         # schema before showing it to the LLM and masks them in any
         # rows we return upstream.
         self._pii = pii
+        # Semantic cache (off by default). On a hit we skip the LLM
+        # generate_sql call and execute the cached statement directly;
+        # the result is still routed through the full safety stack
+        # (sql_guard, statement_timeout, cost_guard) inside the DB
+        # adapter so a cached SQL is no less safe than a fresh one.
+        self._semantic_cache = semantic_cache
 
     async def run_eda(self, query: EdaQuery) -> AnalysisResult:
         result = AnalysisResult(question=query.question)
@@ -85,9 +93,24 @@ class RunEdaUseCase(EdaUseCase):
                     query.connection_url, schema.engine.value
                 )
 
-            # Step 2 — Generate SQL using the PII-redacted schema view.
-            logger.info("Generating SQL for question: %s", query.question)
-            sql = await self._llm.generate_sql(llm_schema, query)
+            # Step 2 — Generate SQL. We consult the semantic cache
+            # FIRST: if a near-duplicate question (cosine >= threshold,
+            # same DB fingerprint) is on file, reuse its SQL and skip
+            # the LLM round-trip entirely. We still go through the
+            # normal execute/report path so the user gets fresh rows
+            # and a fresh narrative on top of the cached SQL.
+            sql = ""
+            cached_hit = None
+            if self._semantic_cache is not None and self._semantic_cache.enabled:
+                cached_hit = await self._semantic_cache.lookup(
+                    query.question, query.connection_url
+                )
+            if cached_hit is not None:
+                sql = cached_hit.generated_sql
+                logger.info("semantic_cache: reusing SQL from cache")
+            else:
+                logger.info("Generating SQL for question: %s", query.question)
+                sql = await self._llm.generate_sql(llm_schema, query)
             result.generated_sql = sql
 
             # Step 3 — Execute SQL with retry-on-error loop
@@ -135,6 +158,24 @@ class RunEdaUseCase(EdaUseCase):
             report = await self._llm.generate_report(llm_schema, query, rows)
             result.report = report
             status = "ok"
+
+            # Step 5 — Cache the successful (question, SQL) pair. We
+            # only store on cache MISS so the embedder isn't called for
+            # paraphrases that already hit; ``store`` is itself a no-op
+            # when the cache is disabled.
+            if (
+                self._semantic_cache is not None
+                and self._semantic_cache.enabled
+                and cached_hit is None
+            ):
+                try:
+                    await self._semantic_cache.store(
+                        query.question,
+                        result.generated_sql or "",
+                        query.connection_url,
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.exception("Failed to write semantic cache entry")
 
         except Exception as exc:
             logger.error("EDA pipeline failed: %s", exc, exc_info=True)
