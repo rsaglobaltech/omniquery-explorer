@@ -32,6 +32,9 @@ jobs:
       - name: Ruff lint
         run: uv run ruff check src tests
 
+      - name: Mypy (curated modules)
+        run: uv run mypy
+
       - name: Bandit (SAST, medium+)
         run: uv run bandit -r src -c pyproject.toml -ll
 

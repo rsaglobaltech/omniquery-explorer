@@ -47,6 +47,8 @@ dev = [
     "bandit>=1.7,<2.0",
     "pip-audit>=2.7,<3.0",
     "pyyaml>=6.0,<7.0",
+    "mypy>=1.11,<2.0",
+    "types-pyyaml>=6.0,<7.0",
 ]
 
 [tool.ruff]
@@ -59,6 +61,27 @@ src = ["src"]
 # Tighten rule set incrementally as legacy modules are refactored.
 select = ["E", "F", "W", "I"]
 ignore = ["E501", "E402"]
+
+[tool.mypy]
+# Pragmatic typing baseline. We catch the high-value classes of bug
+# (undefined names, wrong attribute access, missing return paths) on
+# the modules we already curate with annotations; full --strict is
+# deferred until the legacy adapters carry stubs of their own.
+python_version = "3.12"
+warn_unused_configs = true
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+files = [
+    "src/omniquery/infrastructure/governance",
+    "src/omniquery/infrastructure/observability",
+    "src/omniquery/infrastructure/db/engine_pool.py",
+    "src/omniquery/infrastructure/db/statement_timeout.py",
+    "src/omniquery/adapters/web/rate_limit.py",
+    "src/omniquery/adapters/web/schemas.py",
+    "src/omniquery/adapters/web/security.py",
+]
 
 [tool.bandit]
 # Skips:

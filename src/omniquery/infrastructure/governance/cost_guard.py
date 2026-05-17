@@ -146,7 +146,7 @@ async def explain_and_check(
     logger.debug("cost_guard: EXPLAIN gate skipped for engine %s", engine_type)
 
 
-def _mysql_estimated_rows(node: dict) -> int:
+def _mysql_estimated_rows(node: dict | list | object) -> int:
     """Recursively pluck the largest 'rows_examined_per_scan' in a MySQL plan."""
     # Walking the tree finds the heaviest table access in the plan, which
     # is a reasonable proxy for "did the planner foresee a huge scan?".
