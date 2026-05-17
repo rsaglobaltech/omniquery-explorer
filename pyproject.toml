@@ -1,10 +1,52 @@
 [project]
 name = "omniquery-explorer"
-version = "0.1.0"
-description = "Agentic EDA system via natural language over relational databases"
-authors = [{ name = "Alejandro" }]
+version = "0.2.0"
+description = "Agentic EDA for relational databases via natural language: safe SQL, multi-engine, multi-LLM, with governance, observability, and persistence built in."
+authors = [{ name = "Alejandro Salas", email = "alejandrosalas0891@gmail.com" }]
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.12,<3.13"
+keywords = [
+    "eda",
+    "sql",
+    "nl2sql",
+    "text-to-sql",
+    "langgraph",
+    "agentic",
+    "data-analysis",
+    "postgresql",
+    "mysql",
+    "oracle",
+    "sqlite",
+    "duckdb",
+    "mssql",
+    "ollama",
+    "openai",
+    "anthropic",
+    "fastapi",
+    "opentelemetry",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Database",
+    "Topic :: Database :: Front-Ends",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = [
     "sqlalchemy[asyncio]>=2.0,<3.0",
     "fastapi>=0.111,<1.0",
@@ -14,25 +56,11 @@ dependencies = [
     "httpx>=0.27",
     "pydantic>=2.7,<3.0",
     "pydantic-settings>=2.4,<3.0",
-    "sqlglot>=25.0,<27.0",
-    "tenacity>=8.5,<10.0",
-    "aiosqlite>=0.20,<1.0",
-    "opentelemetry-api>=1.27,<2.0",
-    "opentelemetry-sdk>=1.27,<2.0",
-    "opentelemetry-exporter-otlp-proto-http>=1.27,<2.0",
-    "duckdb-engine>=0.13,<1.0",
-    "alembic>=1.13,<2.0",
-]
-
-[project.optional-dependencies]
-# SQL Server adapter pulls aioodbc which links against unixODBC; kept
-# optional so the base wheel and the slim Docker image stay portable.
-# Install with: `uv sync --extra mssql` (or `pip install '.[mssql]'`).
-mssql = [
-    "aioodbc>=0.5,<1.0",
     "asyncpg>=0.29,<1.0",
     "aiomysql>=0.2,<1.0",
     "oracledb>=2.2,<3.0",
+    "aiosqlite>=0.20,<1.0",
+    "duckdb-engine>=0.13,<1.0",
     "greenlet>=3.5.0",
     "langgraph>=0.2",
     "langchain-core>=0.2",
@@ -40,6 +68,42 @@ mssql = [
     "networkx>=3.3",
     "matplotlib>=3.9",
     "scipy>=1.17.1",
+    "sqlglot>=25.0,<27.0",
+    "tenacity>=8.5,<10.0",
+    "opentelemetry-api>=1.27,<2.0",
+    "opentelemetry-sdk>=1.27,<2.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.27,<2.0",
+    "alembic>=1.13,<2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/rsaglobaltech/omniquery-explorer"
+Repository = "https://github.com/rsaglobaltech/omniquery-explorer"
+Issues = "https://github.com/rsaglobaltech/omniquery-explorer/issues"
+Documentation = "https://github.com/rsaglobaltech/omniquery-explorer/blob/main/README.md"
+Changelog = "https://github.com/rsaglobaltech/omniquery-explorer/blob/main/IMPROVEMENTS.md"
+
+[project.optional-dependencies]
+# SQL Server. aioodbc links against unixODBC, kept optional so the
+# base wheel and the slim Docker image stay portable.
+# Install with: `uv sync --extra mssql` (or `pip install '.[mssql]'`).
+mssql = [
+    "aioodbc>=0.5,<1.0",
+]
+# AWS Bedrock — Anthropic Claude on Bedrock via boto3.
+# Install with: `pip install '.[bedrock]'`.
+bedrock = [
+    "boto3>=1.34,<2.0",
+]
+# Google Vertex AI — Anthropic Claude on Vertex.
+# Install with: `pip install '.[vertex]'`.
+vertex = [
+    "anthropic[vertex]>=0.40,<1.0",
+]
+# Persistent LangGraph conversational memory.
+# Install with: `pip install '.[memory]'`.
+memory = [
+    "langgraph-checkpoint-sqlite>=2.0,<3.0",
 ]
 
 [project.scripts]
