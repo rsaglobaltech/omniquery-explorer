@@ -2,220 +2,230 @@
 
 **Agentic Exploratory Data Analysis (EDA) for relational databases using natural language.**
 
-OmniQuery Explorer turns plain-language business questions into safe SQL, executes them on real databases, and returns interpretable analytical reports. It is designed for data analysts, engineers, and product teams who need faster exploration without sacrificing control, traceability, or architecture quality.
+OmniQuery Explorer turns plain-language business questions into safe SQL, executes them on real databases, and returns interpretable analytical reports. CLI **and** HTTP API, multi-engine, multi-LLM, with built-in governance (cost guard, PII masking, SQL hardening, observability).
 
-## What This Project Is About
+---
 
-Most NL-to-SQL tools stop at query generation. OmniQuery Explorer goes further with an end-to-end EDA pipeline:
+## What this project is
+
+Most NL-to-SQL tools stop at query generation. OmniQuery Explorer runs an end-to-end EDA pipeline:
 
 - Understands the database structure automatically
 - Profiles and ranks the most relevant tables
 - Proposes high-value exploratory questions
 - Generates and executes read-only SQL
 - Recovers from SQL errors with an automated correction loop
-- Produces structured analytical output for decision-making
+- Produces a structured analytical report
 
-## Core Features
+It is built as a clean hexagonal architecture so the same core powers the CLI, the FastAPI HTTP adapter, and (eventually) any other driving adapter.
 
-- **Natural language to SQL** with schema-aware prompting
-- **Strict read-only policy** (`SELECT` only)
-- **Multi-database support**: PostgreSQL, MySQL/MariaDB, Oracle
-- **Automatic schema introspection** (tables, columns, PKs, FKs)
-- **Table profiling** (row counts, null ratios, cardinality, metric/date signals)
-- **Graph-based table ranking** using foreign-key relationships
-- **Automated SQL repair loop** on execution failures
-- **Rich CLI UX** with progress, tabular output, markdown reports, and charts
+---
 
-## Agents Used in the Pipeline
+## Core capabilities
 
-The multi-agent orchestration is implemented as a LangGraph state graph. Each node acts as a specialized agent responsibility:
+### Pipeline
 
-1. `introspect`
-Extracts database schema metadata.
-2. `profile`
-Computes table-level statistical profiles.
-3. `build_graph`
-Builds FK graph and computes table importance ranking.
-4. `propose_questions`
-Generates exploratory questions aligned with discovered domain structure.
-5. `generate_sql`
-Produces SQL from the selected question and verified schema.
-6. `execute_sql`
-Runs SQL in read-only mode.
-7. `fix_sql`
-Repairs SQL when execution errors occur.
-8. `generate_report`
-Builds the final EDA narrative and findings.
+- **Natural language → SQL** with schema-aware prompting and two-phase generation.
+- **AST-based SQL guard** (sqlglot): rejects DML, DDL, CTE-wrapped DML, multiple statements, and a blocklist of dangerous functions (`pg_sleep`, `dblink`, `xp_cmdshell`, …).
+- **Dialect-aware `LIMIT` / `FETCH FIRST`** rewriting.
+- **Automatic schema introspection** (tables, columns, PKs, FKs).
+- **Table profiling** (row counts, null ratios, cardinality, metric/date signals).
+- **Graph-based table ranking** using foreign-key topology (PageRank + composite score).
+- **Automated SQL repair loop** on execution failures.
 
-For exploration-only mode, the graph can finish with a database summary flow after question proposal.
+### Multi-engine
 
-## Algorithms and Heuristics
+PostgreSQL · MySQL/MariaDB · Oracle · SQLite · DuckDB. Adapters share a pooled `AsyncEngine` (LRU, `pool_pre_ping`, recycle) and a dialect-aware statement timeout (`statement_timeout` / `MAX_EXECUTION_TIME` / `asyncio.wait_for`).
 
-### 1. Schema Graph Construction
+### Multi-LLM
 
-- Directed graph where nodes are tables and edges are foreign keys (`child -> parent`)
-- Captures relational topology for downstream importance scoring
+Ollama (local) · OpenAI · Anthropic. Switch with `LLM_PROVIDER` and `LLM_MODEL`. All adapters share prompt builders, retry/back-off (`tenacity`), and OTel span instrumentation.
 
-### 2. Centrality Scoring (PageRank)
+### Governance
 
-- Uses PageRank over FK graph to detect structurally central tables
-- Falls back to normalized in-degree if PageRank cannot converge
+- **Cost guard**: `EXPLAIN (FORMAT JSON)` (Postgres) / `EXPLAIN FORMAT=JSON` (MySQL) reject queries above configurable cost / row thresholds.
+- **Budget tracker**: per-session caps on queries and LLM tokens.
+- **PII policy**: regex denylist redacts sensitive columns from the prompt **and** masks the values in returned rows.
 
-### 3. Composite Table Importance Score
+### Interfaces
 
-A weighted additive score ranks candidate tables for exploration:
+- **CLI** (`omniquery`) with `ask`, `explore`, `suggest`, `profile`, `schema`.
+- **HTTP API** (`omniquery-web` → `uvicorn`) with `/ask`, `/ask/stream` (SSE), `/explore`, `/schema`, `/health`. API-key auth + token-bucket rate limiter.
 
-- Row volume (normalized)
-- Graph centrality
-- Semantic table-name signal
-- Presence of numeric metrics
-- Data quality proxy (1 - null ratio)
-- Presence of temporal columns
+### Operability
 
-This produces interpretable prioritization for EDA focus.
+- **Pydantic Settings** typed config (envs / `.env` / nested `Settings` blocks).
+- **Persistence** of sessions, queries, reports (SQLite default, Postgres in prod) with **Alembic** migrations applied at boot.
+- **Disk-backed cache** for introspected schemas and embeddings.
+- **OpenTelemetry** spans on every LangGraph node and every LLM HTTP call (toggle with `OBS_OTEL_ENABLED`).
+- **Structured JSON logging** with session + agent correlation.
 
-### 4. Two-Phase SQL Generation
+### Delivery
 
-- Phase A: select relevant tables from the complete schema
-- Phase B: generate SQL using only verified DDL fragments from selected tables
+- **GitHub Actions CI**: ruff + mypy + pytest + bandit + pip-audit.
+- **Multi-arch Docker image** (`linux/amd64` + `linux/arm64`) built via Buildx in `release.yml`, published to GHCR with SBOM + provenance attestations on tag push.
+- **`docker-compose.yml`** for the single-machine path (Ollama + API + persistence volume).
+- **Kubernetes manifests** under `deploy/k8s/`.
 
-This reduces hallucinated joins and non-existent columns.
-
-### 5. SQL Self-Healing Loop
-
-When DB execution raises `ProgrammingError` or `OperationalError`, the pipeline sends the failing SQL + DB error back to the LLM to produce a corrected query, with bounded retries.
+---
 
 ## Architecture
 
-The project follows **Hexagonal Architecture (Ports & Adapters)** with clear DDD-style boundaries.
+Hexagonal (ports & adapters) with explicit DDD boundaries:
 
 ```text
-Driving Adapter (CLI)
-        |
-        v
-Application Layer
-  - RunEdaUseCase
-  - EdaSessionGraph (LangGraph)
-        |
-        v
-Domain Ports
-  - EdaUseCase (inbound)
-  - DatabasePort / LlmPort / ProfilingPort (outbound)
-        |
-        v
-Infrastructure Adapters
-  - PostgreSQL/MySQL/Oracle adapters
-  - SQL profiling adapter
-  - Ollama adapter
-  - Schema graph service
+Driving adapters
+  ├── adapters/cli         (Typer + Rich)
+  └── adapters/web         (FastAPI + SSE, API key auth, rate limiter)
+
+Application
+  ├── use_cases/RunEdaUseCase
+  └── agents/EdaSessionGraph        (LangGraph state graph)
+
+Domain
+  ├── entities (Table, Column, DatabaseSchema, ScoredTable, …)
+  └── ports
+        ├── inbound  (EdaUseCase)
+        └── outbound (DatabasePort, LlmPort, EmbeddingPort, ProfilingPort)
+
+Infrastructure
+  ├── db                (postgres / mysql / oracle / sqlite / duckdb adapters
+  │                     + engine_pool + sql_guard + statement_timeout
+  │                     + sql_profiling_adapter)
+  ├── llm               (ollama / openai / anthropic + shared prompt builders)
+  ├── graph             (schema_graph_service + schema_linker)
+  ├── cache             (disk_cache + cached_database + cached_embedding)
+  ├── governance        (cost_guard, pii_policy)
+  ├── observability     (OpenTelemetry tracer)
+  ├── persistence       (SQLAlchemy ORM + Alembic + PersistenceStore)
+  └── logging
 ```
 
-### Layer Responsibilities
-
-- **Domain**: core entities and contracts, no infrastructure coupling
-- **Application**: orchestration and use-case logic
-- **Infrastructure**: concrete DB/LLM/profiling implementations
-- **Adapters**: CLI interaction and presentation
-
-## Tech Stack
-
-- Python 3.12
-- uv
-- Typer + Rich
-- SQLAlchemy async + asyncpg + aiomysql + oracledb
-- LangGraph + LangChain Core
-- Ollama
-- NetworkX + Matplotlib
+---
 
 ## Quickstart
 
-### 1. Install
+### Local install (uv)
 
 ```bash
 uv sync
-```
-
-### 2. Configure environment
-
-```bash
-export DATABASE_URL="postgresql+asyncpg://user:password@host:5432/dbname"
-export OLLAMA_MODEL="llama3.2:latest"
-export OLLAMA_BASE_URL="http://localhost:11434"
-export OLLAMA_TIMEOUT="300"
-```
-
-Optional cache fix for restricted environments:
-
-```bash
-export MPLCONFIGDIR="$(pwd)/.tmp/mplconfig"
-mkdir -p "$MPLCONFIGDIR"
-```
-
-### 3. Start Ollama
-
-```bash
 ollama pull llama3.2:latest
-ollama serve
+ollama serve &
+
+export DATABASE_URL="postgresql+asyncpg://user:pwd@localhost:5432/db"
+uv run omniquery ask "What are the top 10 customers by total orders?"
 ```
 
-### 4. Run
+### HTTP API
 
 ```bash
-uv run omniquery --help
-uv run omniquery ask "What are the top 10 customers by total orders?"
-uv run omniquery explore
+uv run omniquery-web        # serves on :8000 (override via WEB_HOST/PORT)
+curl http://localhost:8000/health
 ```
 
-## CLI Commands
+### Single-machine Docker
 
-- `omniquery ask "<question>"`
-Run a single natural-language EDA query.
-- `omniquery explore`
-Run full multi-agent exploration.
-- `omniquery suggest`
-Generate suggested EDA questions.
-- `omniquery profile --top <n>`
-Show top-ranked tables and profiling metrics.
-- `omniquery schema`
-Print schema details (tables, columns, PKs, FKs).
+```bash
+docker compose up -d
+docker compose exec ollama ollama pull llama3.2:latest
+curl http://localhost:8000/health
+```
 
-## Safety and Reliability
+See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the production path (Kubernetes, env reference, prod checklist, troubleshooting).
 
-- Enforced `SELECT`-only execution policy
-- Automatic `LIMIT` insertion when missing
-- Bounded retry loop for SQL repair
-- Schema-verified prompts to reduce hallucinations
-- Async orchestration with explicit layer boundaries
+---
 
-## Project Structure
+## CLI commands
+
+- `omniquery ask "<question>"` — single NL EDA query.
+- `omniquery explore` — full multi-agent exploration.
+- `omniquery suggest` — generate suggested EDA questions.
+- `omniquery profile --top N` — top-ranked tables and profiling metrics.
+- `omniquery schema` — print schema details (tables, columns, PKs, FKs).
+
+## HTTP endpoints
+
+- `GET  /health` — liveness + config snapshot.
+- `POST /ask` — synchronous EDA query (JSON).
+- `POST /ask/stream` — same flow as SSE.
+- `POST /explore` — schema + profiling + proposed questions.
+- `POST /schema` — schema introspection.
+
+All write endpoints require `X-API-Key` when `ENVIRONMENT=production`. All endpoints are rate-limited per identity (API key or IP) via a token bucket (`WEB_RATE_LIMIT_PER_MINUTE`, default 60).
+
+---
+
+## Configuration
+
+Every knob is a typed Pydantic Setting; see `src/omniquery/config.py` for the source of truth. Highlights:
+
+| Group          | Variable                                  | Default                                | Notes                                              |
+|----------------|-------------------------------------------|----------------------------------------|----------------------------------------------------|
+| LLM            | `LLM_PROVIDER`                            | `ollama`                               | `ollama` / `openai` / `anthropic`                  |
+| LLM            | `LLM_MODEL`                               | `llama3.2:latest`                      |                                                    |
+| DB             | `DATABASE_URL`                            | _unset_                                | Default analysed DB                                |
+| DB             | `DB_STATEMENT_TIMEOUT_MS`                 | `30000`                                |                                                    |
+| Web            | `WEB_API_KEYS`                            | _unset_                                | Comma-separated; required in production            |
+| Web            | `WEB_RATE_LIMIT_PER_MINUTE`               | `60`                                   | 0 disables                                         |
+| Cost guard     | `COST_EXPLAIN_ENABLED`                    | `false`                                | Turn on the EXPLAIN cost gate                      |
+| Cost guard     | `COST_MAX_PLAN_COST` / `COST_MAX_PLAN_ROWS` | 1e6 / 5e7                            | Engine planner units                               |
+| Cost guard     | `COST_MAX_QUERIES_PER_SESSION` / `…TOKENS` | 100 / 1e6                             | Per-session caps                                   |
+| PII            | `PII_DENYLIST_PATTERNS`                   | _(curated regex)_                      | Override to fit your schema                        |
+| Cache          | `CACHE_SCHEMA_TTL_SECONDS`                | `3600`                                 | Embedding TTL configurable separately              |
+| Persistence    | `PERSIST_DATABASE_URL`                    | `sqlite+aiosqlite:///.tmp/omniquery.db`| Move to Postgres in prod                           |
+| Observability  | `OBS_OTEL_ENABLED` / `OBS_OTEL_ENDPOINT`  | `false` / _unset_                      | OTLP/HTTP exporter                                 |
+
+---
+
+## Evaluation harness
+
+A pytest-driven text-to-SQL evaluation harness lives under `tests/eval/`.
+Each dataset is a YAML file pairing a fixture DB with NL questions and
+(optionally) ground-truth rows.
+
+Metrics tracked per dataset:
+
+- `execution_accuracy` (correct rows or non-empty result vs total)
+- `fix_rate` (cases that needed the LLM repair loop)
+- `latency_p50`, `latency_p95` (ms)
+
+Run:
+
+```bash
+# Sanity tests (no LLM, run in default CI)
+uv run pytest tests/eval/test_harness_meta.py -q
+
+# Full harness against the configured provider (requires Ollama/OpenAI/Anthropic)
+uv run pytest tests/eval -m eval -q
+```
+
+Producing a baseline report is a one-liner:
+
+```bash
+uv run python -m tests.eval.runner tests/eval/datasets/ecommerce.yaml > baseline.json
+```
+
+See `tests/eval/README.md` for the dataset schema and adding cases.
+
+---
+
+## Tech stack
+
+Python 3.12 · uv · Typer + Rich · FastAPI + uvicorn · SQLAlchemy 2 async + asyncpg / aiomysql / oracledb / aiosqlite / duckdb_engine · LangGraph + LangChain Core · Ollama / OpenAI / Anthropic · sqlglot · NetworkX + Matplotlib · OpenTelemetry · Pydantic Settings · Alembic.
+
+## Project structure
 
 ```text
 src/omniquery/
-  adapters/cli/
-  application/
-    agents/
-    use_cases/
-  domain/
-    entities/
-    ports/
-  infrastructure/
-    db/
-    graph/
-    llm/
-    container.py
-scripts/aws_import/
-dbs/
-tests/
+  adapters/{cli,web}
+  application/{agents,use_cases}
+  domain/{entities,ports/{inbound,outbound}}
+  infrastructure/{db,llm,graph,cache,governance,observability,persistence,logging}
+deploy/k8s/
+docs/DEPLOYMENT.md
+tests/{unit,integration,e2e,eval}
 ```
 
-## What Is Still in Development
+## Roadmap
 
-- Web API adapter (FastAPI) and browser-based UI
-- Broader automated test coverage (unit + integration)
-- More robust engine-specific profiling and SQL dialect hardening
-- Expanded visualization workflows and interactive session controls
-- Additional enterprise-grade observability and runtime diagnostics
-
-## Current Maturity
-
-The CLI and core orchestration are functional and architecturally solid for iterative EDA workflows. The platform is actively evolving toward full multi-interface delivery (CLI + Web) and stronger production hardening.
+See [`IMPROVEMENTS.md`](IMPROVEMENTS.md) for the full P0-P3 plan with per-iniciativa status and commit references.
